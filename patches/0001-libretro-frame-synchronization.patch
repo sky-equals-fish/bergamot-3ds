@@ -1,0 +1,321 @@
+diff --git a/src/citra_libretro/CMakeLists.txt b/src/citra_libretro/CMakeLists.txt
+index e28f994..04d224b 100644
+--- a/src/citra_libretro/CMakeLists.txt
++++ b/src/citra_libretro/CMakeLists.txt
+@@ -25,6 +25,7 @@ if(ENABLE_VULKAN)
+ endif()
+ 
+ add_library(citra_libretro SHARED
++        ctr_bridge.cpp
+         citra_libretro.cpp
+         citra_libretro.h
+         $<TARGET_OBJECTS:citra_libretro_common>)
+diff --git a/src/citra_libretro/ctr_bridge.cpp b/src/citra_libretro/ctr_bridge.cpp
+new file mode 100644
+index 0000000..bd131e9
+--- /dev/null
++++ b/src/citra_libretro/ctr_bridge.cpp
+@@ -0,0 +1,84 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "citra_libretro/ctr_bridge.h"
++#include "citra_libretro/core_settings.h"
++#include "common/file_util.h"
++#include "common/string_util.h"
++#include "core/core.h"
++#include "core/file_sys/cia_container.h"
++#include "core/hle/service/am/am.h"
++#include "core/loader/loader.h"
++#include "core/hle/kernel/kernel.h"
++#include "core/hle/kernel/process.h"
++#include "core/memory.h"
++#include <cstring>
++#include <filesystem>
++
++extern "C" int ctr_inspect_content(const char* path, ctr_content_info* info) {
++    if (!path || !info) return -1;
++    *info = {};
++    try {
++        if (Common::ToLower(std::filesystem::path(path).extension().string()) == ".cia") {
++            FileUtil::IOFile file(path, "rb");
++            FileSys::CIAContainer cia;
++            if (cia.Load(&file) != Loader::ResultStatus::Success) return -2;
++            info->title_id = cia.GetTitleMetadata().GetTitleID();
++            info->version = cia.GetTitleMetadata().GetTitleVersion();
++            info->is_cia = 1;
++            info->version_known = 1;
++            info->cia_content_encrypted = cia.GetTitleMetadata().HasEncryptedContent(cia.GetHeader());
++            return 0;
++        }
++        auto loader = Loader::GetLoader(path);
++        if (!loader || loader->ReadProgramId(info->title_id) != Loader::ResultStatus::Success)
++            return -2;
++        return 0;
++    } catch (...) { return -3; }
++}
++
++extern "C" int ctr_install_cia(const char* path, char* output, size_t capacity) {
++    if (!path || !output || !capacity) return -1;
++    output[0] = '\0';
++    if (Core::System::GetInstance().IsPoweredOn()) return -4;
++    try {
++        ctr_content_info info{};
++        const auto inspected = ctr_inspect_content(path, &info);
++        if (inspected || !info.is_cia) return -2;
++        if (info.cia_content_encrypted) return static_cast<int>(Service::AM::InstallStatus::ErrorEncrypted);
++        LibRetro::ParseCoreOptions(); // Establish the host's isolated storage path.
++        const auto result = Service::AM::InstallCIA(path, {});
++        if (result != Service::AM::InstallStatus::Success) return static_cast<int>(result);
++        const auto installed = Service::AM::GetTitleContentPath(
++            Service::AM::GetTitleMediaType(info.title_id), info.title_id, 0);
++        if (installed.size() + 1 > capacity) return -5;
++        std::memcpy(output, installed.c_str(), installed.size() + 1);
++        return 0;
++    } catch (...) { return -3; }
++}
++
++extern "C" int ctr_sample_performance(ctr_perf_info* info) {
++    if (!info) return -1;
++    *info = {};
++    auto& system = Core::System::GetInstance();
++    if (!system.IsPoweredOn()) return -4;
++    const auto stats = system.GetAndResetPerfStats();
++    info->system_fps = stats.system_fps;
++    info->game_fps = stats.game_fps;
++    info->emulation_speed = stats.emulation_speed;
++    info->gpu_seconds = stats.time_gpu;
++    info->swap_seconds = stats.time_swap;
++    return 0;
++}
++
++extern "C" int ctr_read_guest_memory(uint64_t title_id, uint32_t address, void* output, size_t size) {
++    if (!output || !size || size > 4096 || uint64_t(address) + size > 0x100000000ULL) return -1;
++    auto& system = Core::System::GetInstance();
++    if (!system.IsPoweredOn()) return -4;
++    for (const auto& process : system.Kernel().GetProcessList()) {
++        if (!process->codeset || process->codeset->program_id != title_id) continue;
++        for (size_t i = 0; i < size; ++i)
++            if (!system.Memory().IsValidVirtualAddress(*process, address + static_cast<uint32_t>(i))) return -2;
++        system.Memory().ReadBlock(*process, address, output, size);
++        return 0;
++    }
++    return -3;
++}
+diff --git a/src/citra_libretro/ctr_bridge.h b/src/citra_libretro/ctr_bridge.h
+new file mode 100644
+index 0000000..f594b31
+--- /dev/null
++++ b/src/citra_libretro/ctr_bridge.h
+@@ -0,0 +1,33 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Local CTR Runtime extension; not part of the upstream libretro ABI.
++#pragma once
++#include <stddef.h>
++#include <stdint.h>
++#ifdef __cplusplus
++extern "C" {
++#endif
++typedef struct ctr_content_info {
++    uint64_t title_id;
++    uint16_t version;
++    uint8_t is_cia;
++    uint8_t version_known;
++    uint8_t cia_content_encrypted;
++} ctr_content_info;
++// 0 success, negative values are bridge validation failures.
++int ctr_inspect_content(const char* path, ctr_content_info* info);
++// 0 success; positive values are Service::AM::InstallStatus.
++// Call between retro_init and retro_load_game, on the core owner thread.
++int ctr_install_cia(const char* path, char* content_path, size_t capacity);
++typedef struct ctr_perf_info {
++    double system_fps;
++    double game_fps;
++    double emulation_speed;
++    double gpu_seconds;
++    double swap_seconds;
++} ctr_perf_info;
++int ctr_sample_performance(ctr_perf_info* info);
++// Read-only guest inspection, only between retro_run calls on the owner thread.
++int ctr_read_guest_memory(uint64_t title_id, uint32_t address, void* output, size_t size);
++#ifdef __cplusplus
++}
++#endif
+diff --git a/src/citra_libretro/emu_window/libretro_window.cpp b/src/citra_libretro/emu_window/libretro_window.cpp
+index 307e14a..a7df93b 100644
+--- a/src/citra_libretro/emu_window/libretro_window.cpp
++++ b/src/citra_libretro/emu_window/libretro_window.cpp
+@@ -14,6 +14,7 @@
+ #include "citra_libretro/input/input_factory.h"
+ #include "common/settings.h"
+ #include "core/3ds.h"
++#include "core/core_timing.h"
+ #ifdef ENABLE_OPENGL
+ #include "video_core/renderer_opengl/gl_state.h"
+ #endif
+@@ -300,7 +301,7 @@ void EmuWindow_LibRetro::UpdateLayout() {
+ 
+     // Update Libretro with our status
+     struct retro_system_av_info info{};
+-    info.timing.fps = 60.0;
++    info.timing.fps = SCREEN_REFRESH_RATE;
+     info.timing.sample_rate = AudioCore::native_sample_rate;
+     info.geometry.aspect_ratio = (float)baseX / (float)baseY;
+     info.geometry.base_width = baseX;
+diff --git a/src/citra_libretro/environment.cpp b/src/citra_libretro/environment.cpp
+index 01ffecf..d60c153 100644
+--- a/src/citra_libretro/environment.cpp
++++ b/src/citra_libretro/environment.cpp
+@@ -8,6 +8,7 @@
+ #include "audio_core/libretro_sink.h"
+ #include "common/scm_rev.h"
+ #include "core/3ds.h"
++#include "core/core_timing.h"
+ #include "core_settings.h"
+ #include "emu_window/libretro_window.h"
+ #include "environment.h"
+@@ -303,7 +304,7 @@ void retro_set_input_state(retro_input_state_t cb) {
+ }
+ 
+ void retro_get_system_av_info(struct retro_system_av_info* info) {
+-    info->timing.fps = 60.0;
++    info->timing.fps = SCREEN_REFRESH_RATE;
+     info->timing.sample_rate = AudioCore::native_sample_rate;
+ 
+     // Compute geometry from current settings so the frontend allocates the
+diff --git a/src/citra_libretro/libretro.osx.def b/src/citra_libretro/libretro.osx.def
+index 53a556a..f644bb4 100644
+--- a/src/citra_libretro/libretro.osx.def
++++ b/src/citra_libretro/libretro.osx.def
+@@ -7,6 +7,10 @@ _retro_set_audio_sample_batch
+ _retro_set_input_poll
+ _retro_set_input_state
+ _retro_init
++_ctr_inspect_content
++_ctr_install_cia
++_ctr_sample_performance
++_ctr_read_guest_memory
+ _retro_deinit
+ _retro_api_version
+ _retro_get_system_info
+diff --git a/src/citra_libretro/libretro_vk.cpp b/src/citra_libretro/libretro_vk.cpp
+index 0a4c66e..b0f7dc4 100644
+--- a/src/citra_libretro/libretro_vk.cpp
++++ b/src/citra_libretro/libretro_vk.cpp
+@@ -5,6 +5,7 @@
+ #include <algorithm>
+ #include <memory>
+ #include <stdexcept>
++#include <string_view>
+ #include <vector>
+ #include <boost/container/static_vector.hpp>
+ #include <fmt/format.h>
+@@ -18,6 +19,9 @@
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ 
+ #include <vk_mem_alloc.h>
++#ifdef __APPLE__
++#include <vulkan/vulkan_metal.h>
++#endif
+ 
+ static const struct retro_hw_render_interface_vulkan* vulkan_intf;
+ 
+@@ -188,6 +192,20 @@ bool CreateVulkanDevice(struct retro_vulkan_context* context, VkInstance instanc
+     device_info.enabledLayerCount = num_required_device_layers;
+     device_info.ppEnabledLayerNames = required_device_layers;
+     device_info.pNext = &enabled_features;
++#ifdef __APPLE__
++    // When the frontend negotiated VK_EXT_metal_objects, let it export this
++    // device's MTLCommandQueue so Metal presentation can share the core's
++    // in-order queue instead of serializing on CPU waits.
++    VkExportMetalObjectCreateInfoEXT export_queue_info{
++        VK_STRUCTURE_TYPE_EXPORT_METAL_OBJECT_CREATE_INFO_EXT};
++    export_queue_info.exportObjectType = VK_EXPORT_METAL_OBJECT_TYPE_METAL_COMMAND_QUEUE_BIT_EXT;
++    if (std::any_of(enabled_exts.begin(), enabled_exts.end(), [](const char* name) {
++            return std::string_view{name} == VK_EXT_METAL_OBJECTS_EXTENSION_NAME;
++        })) {
++        export_queue_info.pNext = device_info.pNext;
++        device_info.pNext = &export_queue_info;
++    }
++#endif
+ 
+     PFN_vkCreateDevice vkCreateDevice =
+         (PFN_vkCreateDevice)get_instance_proc_addr(instance, "vkCreateDevice");
+@@ -424,7 +442,16 @@ void PresentWindow::CreateOutputTexture(u32 width, u32 height) {
+     output_height = height;
+ 
+     // Create output image with LibRetro requirements
++#ifdef __APPLE__
++    // This local Apple host enables VK_EXT_metal_objects during negotiation.
++    const VkExportMetalObjectCreateInfoEXT export_info{
++        VK_STRUCTURE_TYPE_EXPORT_METAL_OBJECT_CREATE_INFO_EXT, nullptr,
++        VK_EXPORT_METAL_OBJECT_TYPE_METAL_TEXTURE_BIT_EXT};
++#endif
+     const vk::ImageCreateInfo image_info = {
++#ifdef __APPLE__
++        .pNext = &export_info,
++#endif
+         .imageType = vk::ImageType::e2D,
+         .format = output_format,
+         .extent = {width, height, 1},
+@@ -704,7 +731,9 @@ void PresentWindow::Present(Frame* frame) {
+     persistent_libretro_image.create_info =
+         static_cast<VkImageViewCreateInfo>(output_view_create_info);
+ 
+-    vulkan_intf->set_image(vulkan_intf->handle, &persistent_libretro_image, 0, nullptr,
++    // Transfer the binary semaphore to the frontend for exactly one wait.
++    const VkSemaphore ready = static_cast<VkSemaphore>(frame->render_ready);
++    vulkan_intf->set_image(vulkan_intf->handle, &persistent_libretro_image, 1, &ready,
+                            instance.GetGraphicsQueueFamilyIndex());
+ 
+     // Call EmuWindow SwapBuffers to trigger LibRetro video frame submission
+@@ -786,15 +815,17 @@ void MasterSemaphoreLibRetro::SubmitWork(vk::CommandBuffer cmdbuf, vk::Semaphore
+     // Get a fence from the pool
+     const vk::Fence fence = GetFreeFence();
+ 
+-    // Strip semaphores - RetroArch handles frame sync, we track resources internally
++    // Preserve the scheduler's dependencies, including the render-ready signal
++    // consumed by the frontend. Fences only cover internal resource tracking.
++    const vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eAllCommands;
+     const vk::SubmitInfo submit_info = {
+-        .waitSemaphoreCount = 0,
+-        .pWaitSemaphores = nullptr,
+-        .pWaitDstStageMask = nullptr,
++        .waitSemaphoreCount = wait ? 1u : 0u,
++        .pWaitSemaphores = wait ? &wait : nullptr,
++        .pWaitDstStageMask = wait ? &wait_stage : nullptr,
+         .commandBufferCount = 1u,
+         .pCommandBuffers = &cmdbuf,
+-        .signalSemaphoreCount = 0,
+-        .pSignalSemaphores = nullptr,
++        .signalSemaphoreCount = signal ? 1u : 0u,
++        .pSignalSemaphores = signal ? &signal : nullptr,
+     };
+ 
+     // Use LibRetro's queue coordination
+diff --git a/src/core/loader/ncch.cpp b/src/core/loader/ncch.cpp
+index 80cde4b..0a5a6a7 100644
+--- a/src/core/loader/ncch.cpp
++++ b/src/core/loader/ncch.cpp
+@@ -346,6 +346,7 @@ ResultStatus AppLoader_NCCH::Load(std::shared_ptr<Kernel::Process>& process) {
+ 
+     if (OpenUpdateNCCH() == ResultStatus::Success) {
+         overlay_ncch = &update_ncch;
++        LOG_INFO(Loader, "CTR_RUNTIME_UPDATE_APPLIED base={}", program_id);
+     }
+ 
+     if (auto room_member = Network::GetRoomMember().lock()) {
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+index 219d11c..54eaa92 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+@@ -253,6 +253,11 @@ void RendererVulkan::RenderToWindow(PresentWindow& window, const Layout::Framebu
+ 
+         DrawScreens(frame, layout, flipped);
+         scheduler.Flush(frame->render_ready);
++#ifdef HAVE_LIBRETRO
++        // A frontend may submit a wait on this same queue during Present.
++        // Ensure the worker has submitted the signal before handing it off.
++        scheduler.WaitWorker();
++#endif
+         window.Present(frame);
+         if ((secondaryWindowEnabled && isSecondaryWindow) || (!secondaryWindowEnabled)) {
+             Core::PerfStats::game_frames_updated = false;

@@ -1,0 +1,20 @@
+{
+  "azahar": {
+    "url": "https://github.com/azahar-emu/azahar.git",
+    "commit": "6b4e7f2e694514fdf2f72dc20368609b7cd4912e",
+    "patch": "patches/0001-libretro-frame-synchronization.patch",
+    "additional_patches": [
+      "patches/0007-azahar-no-jit-build.patch"
+    ]
+  },
+  "nxnative_research": {
+    "url": "https://github.com/seedds/nxnative.git",
+    "commit": "822f724c92fa9973ddc4ab0de2e3eccb9f6b6f41"
+  },
+  "moltenvk": {
+    "version": "1.4.1",
+    "ios_sha256": "54336b90212c390ed5935c96460aed3bf651ad7d3c0f0e956586ce18e9c0b701",
+    "macos_sha256": "5ea0c259df7ded9a275444820f09cced54d6e5a7c7a31d262de62a5cdb7e15cf",
+    "all_sha256": "2c498bf8c98b88ba1e84c1f153403d4c1a8490c122d9e2a3df238b25d4e10557"
+  }
+}

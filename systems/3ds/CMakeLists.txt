@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.25)
+project(BergamotThreeDS VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+set(CTR_BUILD_FRONTEND OFF)
+set(CTR_BUILD_HOST_TOOLS OFF)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../.." "${CMAKE_CURRENT_BINARY_DIR}/runtime")
+add_library(Bergamot::ThreeDS ALIAS ctr-runtime)
+add_library(Bergamot::ThreeDSMetal ALIAS ctr-metal-presenter)
+target_compile_features(ctr-runtime PUBLIC cxx_std_20)

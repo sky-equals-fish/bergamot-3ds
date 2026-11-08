@@ -1,0 +1,7 @@
+.venv/
+build/
+vendor/
+research/
+artifacts/
+runtime-data/
+.DS_Store

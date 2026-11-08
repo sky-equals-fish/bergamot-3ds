@@ -1,0 +1,49 @@
+CTR Runtime experimental local prototype
+
+The runtime is based on Azahar, not a newly written 3DS emulator. Azahar and its
+contributors provide the ARM execution, kernel/services, audio, loaders, PICA
+translation, and most game compatibility. See dependencies.json for the exact
+revision and patches/ for local changes. Azahar is GPL-3.0-or-later; this local
+host and its modifications are also GPL-3.0-or-later. Dependency licenses remain
+with their respective owners. The corresponding sources are in this project
+and its pinned vendor checkout. Preserve them when sharing builds.
+
+MoltenVK is provided under Apache-2.0. libretro headers retain their MIT license.
+NX Native was researched as an architectural reference; its code is not linked
+into this application. No commercial game, system firmware or keys are included.
+The included ARM11 probe was written for this project.
+
+The host, tests, packaging, and local core changes were created with AI assistance.
+They are a local prototype, not an upstream Azahar contribution or endorsed build.
+
+The experimental Bergamot PSP adapter uses PPSSPP (GPL-2.0-or-later), pinned in
+psp-dependencies.json, with the local no-JIT policy patch. PPSSPP supplies MIPS/IR
+execution, PSP services, graphics, audio and compatibility. This is not a new
+from-scratch PSP emulator or an upstream-endorsed PPSSPP distribution. The adapter
+and original PSP homebrew integration fixture are GPL-3.0-or-later like this host.
+Preserve PPSSPP and its submodules' licenses, notices and corresponding source
+when distributing combined builds. No PSP game, SDK or Sony firmware is included.
+
+The experimental GameCube/Wii integration uses Dolphin (GPL-2.0-or-later), pinned
+in dolphin-dependencies.json. Dolphin supplies PowerPC interpretation, console
+hardware, DSP, IOS services and graphics. The host callback stubs are adapted
+from Dolphin's UnitTests/StubHost.cpp with its copyright and SPDX notice retained.
+The Bergamot adapter and original PowerPC/DOL probes are GPL-3.0-or-later like
+this host. Preserve upstream and dependency licenses and corresponding source
+when sharing combined builds. This is not an upstream-endorsed Dolphin build.
+No Nintendo game, SDK, dumped BIOS or user NAND is included in the probes.
+
+Active handheld dependencies: mGBA (MPL-2.0) supplies GBA emulation; libretro
+melonDS (GPL-3.0-or-later) supplies DS emulation. Exact revisions are recorded in
+handheld-dependencies.json. Preserve their license texts and corresponding-source
+obligations when distributing these libraries or modified versions.
+
+The library can extract icons from user-supplied games and download optional
+artwork from Libretro Thumbnails. Those images are not Bergamot-authored assets
+and are not included in public source or binary release packages. A public image
+host is not itself a grant of redistribution rights. Private imported skins are
+excluded by default; permission is required before redistributing them.
+
+Nintendo, Nintendo 3DS, Nintendo DS, Game Boy Advance and game names are used to
+identify compatibility. Bergamot is independent and is not affiliated with or
+endorsed by Nintendo or the upstream emulator projects.

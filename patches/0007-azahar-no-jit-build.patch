@@ -1,0 +1,233 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e99de6a..c1844e6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -38,6 +38,11 @@ if (BSD STREQUAL "OpenBSD")
+ endif()
+ 
+ option(ENABLE_LIBRETRO "Build as a LibRetro core" OFF)
++option(BERGAMOT_NO_JIT "Exclude native CPU and PICA shader code generators" OFF)
++if(BERGAMOT_NO_JIT)
++    add_compile_definitions(BERGAMOT_NO_JIT=1)
++    set(ENABLE_BUILTIN_KEYBLOB OFF CACHE BOOL "No bundled console keys" FORCE)
++endif()
+ 
+ # Some submodules like to pick their own default build type if not specified.
+ # Make sure we default to Release build type always, unless the generator has custom types.
+diff --git a/externals/CMakeLists.txt b/externals/CMakeLists.txt
+index cfb63c3..1d99596 100644
+--- a/externals/CMakeLists.txt
++++ b/externals/CMakeLists.txt
+@@ -92,7 +92,7 @@ endif()
+ 
+ 
+ # Xbyak
+-if ("x86_64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "x86_64" IN_LIST ARCHITECTURE)
+     if(USE_SYSTEM_XBYAK)
+         find_package(xbyak REQUIRED)
+         add_library(xbyak INTERFACE)
+@@ -103,7 +103,7 @@ if ("x86_64" IN_LIST ARCHITECTURE)
+ endif()
+ 
+ # Oaknut
+-if ("arm64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "arm64" IN_LIST ARCHITECTURE)
+     if(USE_SYSTEM_OAKNUT)
+         find_package(oaknut REQUIRED)
+         add_library(oaknut INTERFACE)
+@@ -113,8 +113,13 @@ if ("arm64" IN_LIST ARCHITECTURE)
+     endif()
+ endif()
+ 
++# Header-only map is also used by the interpreter/Vulkan path.
++if(BERGAMOT_NO_JIT AND NOT TARGET tsl::robin_map)
++    add_subdirectory(dynarmic/externals/robin-map EXCLUDE_FROM_ALL)
++endif()
++
+ # Dynarmic
+-if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE))
+     if(USE_SYSTEM_DYNARMIC)
+         find_package(dynarmic REQUIRED)
+         add_library(dynarmic INTERFACE)
+diff --git a/src/citra_libretro/core_settings.cpp b/src/citra_libretro/core_settings.cpp
+index 7b43e31..4f5e14a 100644
+--- a/src/citra_libretro/core_settings.cpp
++++ b/src/citra_libretro/core_settings.cpp
+@@ -844,7 +844,7 @@ void RegisterCoreOptions(void) {
+ 
+ static void ParseCpuOptions(void) {
+     Settings::values.use_cpu_jit =
+-#ifdef IOS
++#if defined(IOS) || defined(BERGAMOT_NO_JIT)
+         false;
+ #else
+         LibRetro::FetchVariable(config::cpu::use_cpu_jit, config::enabled) == config::enabled;
+@@ -989,7 +989,7 @@ static void ParseGraphicsOptions(void) {
+                                                              config::enabled) == config::enabled;
+ 
+     Settings::values.use_shader_jit =
+-#ifdef IOS
++#if defined(IOS) || defined(BERGAMOT_NO_JIT)
+         false;
+ #else
+         LibRetro::FetchVariable(config::graphics::use_shader_jit, config::enabled) ==
+diff --git a/src/common/CMakeLists.txt b/src/common/CMakeLists.txt
+index 5a00858..77599ee 100644
+--- a/src/common/CMakeLists.txt
++++ b/src/common/CMakeLists.txt
+@@ -158,11 +158,11 @@ create_target_directory_groups(citra_common)
+ target_link_libraries(citra_common PUBLIC fmt microprofile Boost::boost Boost::serialization Boost::iostreams)
+ target_link_libraries(citra_common PRIVATE cryptopp microtar citra_zstd)
+ 
+-if ("x86_64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "x86_64" IN_LIST ARCHITECTURE)
+     target_link_libraries(citra_common PRIVATE xbyak)
+ endif()
+ 
+-if ("arm64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "arm64" IN_LIST ARCHITECTURE)
+     target_link_libraries(citra_common PRIVATE oaknut)
+ endif()
+ 
+diff --git a/src/core/CMakeLists.txt b/src/core/CMakeLists.txt
+index 814863e..acc6835 100644
+--- a/src/core/CMakeLists.txt
++++ b/src/core/CMakeLists.txt
+@@ -551,7 +551,7 @@ if (ENABLE_FFMPEG)
+     target_include_directories(citra_core PRIVATE ${FFMPEG_INCLUDE_DIRS})
+ endif()
+ 
+-if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE))
+     target_sources(citra_core PRIVATE
+         arm/dynarmic/arm_dynarmic.cpp
+         arm/dynarmic/arm_dynarmic.h
+@@ -559,12 +559,13 @@ if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
+         arm/dynarmic/arm_dynarmic_cp15.h
+         arm/dynarmic/arm_exclusive_monitor.cpp
+         arm/dynarmic/arm_exclusive_monitor.h
+-        arm/dynarmic/arm_tick_counts.cpp
+-        arm/dynarmic/arm_tick_counts.h
+     )
+     target_link_libraries(citra_core PRIVATE dynarmic)
+ endif()
+ 
++# Static instruction timing is shared by FastInterp; it emits no native code.
++target_sources(citra_core PRIVATE arm/dynarmic/arm_tick_counts.cpp arm/dynarmic/arm_tick_counts.h)
++
+ # FastInterp's dispatch loop requires GCC/Clang computed goto; MSVC builds
+ # fall back to DynCom when the JIT is off.
+ if (NOT MSVC)
+diff --git a/src/core/arm/exclusive_monitor.cpp b/src/core/arm/exclusive_monitor.cpp
+index 5ba6dc9..1d53441 100644
+--- a/src/core/arm/exclusive_monitor.cpp
++++ b/src/core/arm/exclusive_monitor.cpp
+@@ -2,7 +2,7 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include "common/arch.h"
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+ #include "core/arm/dynarmic/arm_exclusive_monitor.h"
+ #endif
+ #include "common/settings.h"
+@@ -15,7 +15,7 @@ ExclusiveMonitor::~ExclusiveMonitor() = default;
+ 
+ std::unique_ptr<Core::ExclusiveMonitor> MakeExclusiveMonitor(Memory::MemorySystem& memory,
+                                                              std::size_t num_cores) {
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+     if (Settings::values.use_cpu_jit) {
+         return std::make_unique<Core::DynarmicExclusiveMonitor>(memory, num_cores);
+     }
+diff --git a/src/core/core.cpp b/src/core/core.cpp
+index f55b92a..d561f82 100644
+--- a/src/core/core.cpp
++++ b/src/core/core.cpp
+@@ -19,7 +19,7 @@
+ #include "core/hle/service/cam/cam.h"
+ #include "core/hle/service/hid/hid.h"
+ #include "core/hle/service/ir/ir_user.h"
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+ #include "core/arm/dynarmic/arm_dynarmic.h"
+ #endif
+ #include "core/arm/dyncom/arm_dyncom.h"
+@@ -622,7 +622,7 @@ System::ResultStatus System::Init(Frontend::EmuWindow& emu_window,
+     exclusive_monitor = MakeExclusiveMonitor(*memory, num_cores);
+     cpu_cores.reserve(num_cores);
+     if (Settings::values.use_cpu_jit) {
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+         for (u32 i = 0; i < num_cores; ++i) {
+             cpu_cores.push_back(std::make_shared<ARM_Dynarmic>(
+                 *this, *memory, i, timing->GetTimer(i), *exclusive_monitor));
+diff --git a/src/video_core/CMakeLists.txt b/src/video_core/CMakeLists.txt
+index 528072c..64f8d2b 100644
+--- a/src/video_core/CMakeLists.txt
++++ b/src/video_core/CMakeLists.txt
+@@ -85,12 +85,6 @@ add_library(video_core STATIC EXCLUDE_FROM_ALL
+     shader/shader.h
+     shader/shader_interpreter.cpp
+     shader/shader_interpreter.h
+-    shader/shader_jit.cpp
+-    shader/shader_jit.h
+-    shader/shader_jit_a64_compiler.cpp
+-    shader/shader_jit_a64_compiler.h
+-    shader/shader_jit_x64_compiler.cpp
+-    shader/shader_jit_x64_compiler.h
+     texture/etc1.cpp
+     texture/etc1.h
+     texture/texture_decode.cpp
+@@ -217,14 +211,25 @@ create_target_directory_groups(video_core)
+ target_link_libraries(video_core PUBLIC citra_common citra_core)
+ target_link_libraries(video_core PRIVATE Boost::serialization dds-ktx json-headers nihstro-headers tsl::robin_map)
+ 
+-if ("x86_64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "x86_64" IN_LIST ARCHITECTURE)
+     target_link_libraries(video_core PUBLIC xbyak)
+ endif()
+ 
+-if ("arm64" IN_LIST ARCHITECTURE)
++if (NOT BERGAMOT_NO_JIT AND "arm64" IN_LIST ARCHITECTURE)
+     target_link_libraries(video_core PUBLIC oaknut)
+ endif()
+ 
+ if (CITRA_USE_PRECOMPILED_HEADERS)
+     target_precompile_headers(video_core PRIVATE precompiled_headers.h)
+ endif()
++
++if(NOT BERGAMOT_NO_JIT)
++    target_sources(video_core PRIVATE
++    shader/shader_jit.cpp
++    shader/shader_jit.h
++    shader/shader_jit_a64_compiler.cpp
++    shader/shader_jit_a64_compiler.h
++    shader/shader_jit_x64_compiler.cpp
++    shader/shader_jit_x64_compiler.h
++    )
++endif()
+diff --git a/src/video_core/shader/shader.cpp b/src/video_core/shader/shader.cpp
+index 61128d2..792ab54 100644
+--- a/src/video_core/shader/shader.cpp
++++ b/src/video_core/shader/shader.cpp
+@@ -4,7 +4,7 @@
+ 
+ #include "common/arch.h"
+ #include "video_core/shader/shader_interpreter.h"
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+ #include "video_core/shader/shader_jit.h"
+ #endif
+ #include "video_core/shader/shader.h"
+@@ -12,7 +12,7 @@
+ namespace Pica {
+ 
+ std::unique_ptr<ShaderEngine> CreateEngine(bool use_jit) {
+-#if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
++#if !defined(BERGAMOT_NO_JIT) && (CITRA_ARCH(x86_64) || CITRA_ARCH(arm64))
+     if (use_jit) {
+         return std::make_unique<Shader::JitEngine>();
+     }
