@@ -233,8 +233,8 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGInk()} forState:UIControlStateNormal];
     [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGColor(@"141B25")} forState:UIControlStateSelected];
     [_scale addTarget:self action:@selector(scaleChanged) forControlEvents:UIControlEventValueChanged];
-    BGPixelLabel* scaleLabel = [BGPixelLabel new]; scaleLabel.text = @"RESOLUTION"; scaleLabel.font = [UIFont systemFontOfSize:12]; scaleLabel.textColor = BGInk();
-    [scaleLabel.widthAnchor constraintEqualToConstant:124].active = YES;
+    BGPixelLabel* scaleLabel = [BGPixelLabel new]; scaleLabel.text = @"UPSCALING"; scaleLabel.font = [UIFont systemFontOfSize:12]; scaleLabel.textColor = BGInk();
+    [scaleLabel.widthAnchor constraintEqualToConstant:112].active = YES;
     UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale]]; scaleRow.spacing = 12; scaleRow.alignment = UIStackViewAlignmentCenter;
     UIImageView* searchFrame = [[UIImageView alloc] initWithImage:BGSurface(@"field", 0)]; BGNearest(searchFrame); searchFrame.userInteractionEnabled = YES;
     [searchFrame.heightAnchor constraintEqualToConstant:44].active = YES;

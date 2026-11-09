@@ -55,13 +55,13 @@ are kept automatically.
 
 | Setting | Options |
 | --- | --- |
-| Resolution | 1× native (default), 2×, 3×, 4× |
+| Upscaling | 1× native (default), 2×, 3×, 4× |
 | Screen layout | Stacked or side by side |
 | Shaders | Prepare cached shaders (default), or also compile new ones in the background |
 | GPU handoff | Standard (default) or queue-ordered (experimental) |
 
-On Mac, open **Settings** with ⌘,. On iPhone, resolution is on the library screen.
-Native resolution runs best on most devices.
+On Mac, open **Settings** with ⌘,. On iPhone, upscaling is on the library screen.
+Native (1×) runs best on most devices.
 
 Keyboard, game controllers, and the mouse (as the touch screen) all work. The
 full control layout is in the [app guide](docs/PLAYER.md).

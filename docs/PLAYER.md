@@ -37,13 +37,13 @@ button pauses.
 
 | Setting | Options | Default |
 | --- | --- | --- |
-| Resolution | 1× native (400×240), 2×, 3×, 4× (1600×960) | 1× |
+| Upscaling | 1× native (400×240), 2×, 3×, 4× (1600×960) | 1× |
 | Screen layout | Stacked, side by side | Stacked |
 | Shaders | Prepare cached shaders, or also compile new ones in the background | Prepare only |
 | GPU handoff | Standard, queue-ordered (experimental) | Standard |
 
-On Mac, everything is in **Settings** (⌘,), and resolution and layout are also
-in the **Emulation** menu. On iPhone, resolution is on the library screen. Resolution,
+On Mac, everything is in **Settings** (⌘,), and upscaling and layout are also
+in the **Emulation** menu. On iPhone, upscaling is on the library screen. Upscaling,
 shaders and GPU handoff take effect the next time a game starts.
 
 **About shaders:** when a game starts, the app builds every shader that game has

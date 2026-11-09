@@ -159,8 +159,8 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     [emu addItem:[self item:@"Pause" action:@selector(togglePause:) key:@"p" tag:0]];
     [emu addItem:[self item:@"Stop" action:@selector(stopGame:) key:@"." tag:0]];
     [emu addItem:NSMenuItem.separatorItem];
-    NSMenuItem* res = [[NSMenuItem alloc] initWithTitle:@"Internal Resolution" action:nil keyEquivalent:@""];
-    NSMenu* resMenu = [[NSMenu alloc] initWithTitle:@"Internal Resolution"];
+    NSMenuItem* res = [[NSMenuItem alloc] initWithTitle:@"Upscaling" action:nil keyEquivalent:@""];
+    NSMenu* resMenu = [[NSMenu alloc] initWithTitle:@"Upscaling"];
     for (NSInteger s = 1; s <= 4; ++s) [resMenu addItem:[self item:[NSString stringWithFormat:@"%ld× (%ldp)", (long)s, (long)s * 240] action:@selector(setScale:) key:@"" tag:s]];
     res.submenu = resMenu; [emu addItem:res];
     [emu addItem:[self item:@"Side-by-Side Screens" action:@selector(toggleLayout:) key:@"l" tag:0]];
@@ -278,7 +278,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
         _handoffPopup = [self popup:@[@"Standard (sync each frame)", @"Queue-ordered (experimental)"] action:@selector(handoffPicked:)];
         _shaderPopup = [self popup:@[@"Prepare cached shaders (recommended)", @"Also compile new shaders in background"] action:@selector(shadersPicked:)];
         NSGridView* grid = [NSGridView gridViewWithViews:@[
-            @[[NSTextField labelWithString:@"Internal resolution:"], _scalePopup],
+            @[[NSTextField labelWithString:@"Upscaling:"], _scalePopup],
             @[[NSTextField labelWithString:@"Screen layout:"], _layoutPopup],
             @[[NSTextField labelWithString:@"GPU handoff:"], _handoffPopup],
             @[[NSTextField labelWithString:@"Shaders:"], _shaderPopup]]];
@@ -307,9 +307,9 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     const BOOL idle = !_session.running;
     _scalePopup.enabled = _handoffPopup.enabled = _shaderPopup.enabled = idle;   // read at game start
     _scaleNote.stringValue = idle
-        ? @"Native is the 3DS's own resolution and runs best; higher settings look sharper and need more GPU. "
+        ? @"Native (1×) is the 3DS's own resolution and runs best; more upscaling looks sharper and needs more GPU. "
           @"Background shader compiling avoids a pause the first time an effect appears, but can briefly draw scenes with pieces missing."
-        : @"Stop the game to change resolution, GPU handoff or shaders. Screen layout can change any time.";
+        : @"Stop the game to change upscaling, GPU handoff or shaders. Screen layout can change any time.";
 }
 - (void)scalePicked:(NSPopUpButton*)popup { [NSUserDefaults.standardUserDefaults setInteger:popup.indexOfSelectedItem + 1 forKey:@"BGPlayerScale"]; }
 - (void)layoutPicked:(NSPopUpButton*)popup { if ((popup.indexOfSelectedItem == 1) != _sideBySide) [self toggleLayout:nil]; }
