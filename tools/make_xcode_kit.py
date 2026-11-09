@@ -39,7 +39,7 @@ def copy_inputs(kit):
     src, lib, res = kit / "Sources", kit / "Libraries", kit / "Resources"
     for d in (src / "include/vulkan", src / "include/vk_video", src / "include/citra_libretro", lib, res / "PixelArt", res / "Licenses"):
         d.mkdir(parents=True, exist_ok=True)
-    for f in ("player/ios_player.mm", "player/player_session.h", "ios/pixel_controls.h", "ios/game_art.hpp", "ios/user_keys.h",
+    for f in ("player/ios_player.mm", "player/player_session.h", "player/key_import.h", "ios/pixel_controls.h", "ios/game_art.hpp", "ios/user_keys.h",
               "src/runtime.hpp", "src/vulkan_backend.hpp", "src/metal_presenter.h", "src/display_layout.hpp", "src/frame_pacer.hpp"):
         shutil.copy2(ROOT / f, src / Path(f).name)
     retro = ROOT / "vendor/azahar/externals/libretro-common/libretro-common/include"

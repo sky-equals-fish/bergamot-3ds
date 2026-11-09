@@ -31,6 +31,7 @@ if(CTR_PLATFORM MATCHES "^ios")
         COMMAND ${CMAKE_COMMAND} -E copy "${BG_CORE}" "$<TARGET_BUNDLE_DIR:Bergamot3DS>/Frameworks/azahar_libretro.dylib")
 else()
     add_executable(Bergamot3DS MACOSX_BUNDLE mac_player.mm)
+    target_include_directories(Bergamot3DS PRIVATE "${BG_ROOT}/ios")
     target_compile_options(Bergamot3DS PRIVATE -fobjc-arc)
     target_link_libraries(Bergamot3DS PRIVATE Bergamot::ThreeDSMetal
         "-framework AppKit" "-framework GameController" "-framework AVFoundation" "-framework UniformTypeIdentifiers")

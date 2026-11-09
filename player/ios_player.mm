@@ -18,13 +18,9 @@ static void BGNearest(UIView* v) { v.layer.magnificationFilter = kCAFilterNeares
 #import "pixel_controls.h"
 #include "game_art.hpp"
 #import "user_keys.h"   // the Bergamot app's keys.txt validator
+#import "key_import.h"
 
 static BOOL BGGameRanThisLaunch = NO;   // Azahar reads keys.txt once, when the first game starts
-static NSURL* BGSysDataFolder() {
-    NSURL* u = [BGPlayerDataRoot() URLByAppendingPathComponent:@"saves/Azahar/sysdata"];
-    [NSFileManager.defaultManager createDirectoryAtURL:u withIntermediateDirectories:YES attributes:nil error:nil];
-    return u;
-}
 
 static NSArray<NSString*>* BGGameExtensions() { return @[@"3ds", @"cci", @"cxi", @"cia", @"3dsx"]; }
 static NSURL* BGGamesFolder() {
@@ -431,41 +427,10 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     UIDocumentPickerViewController* p = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeData, UTTypePlainText] asCopy:YES];
     p.delegate = self; p.allowsMultipleSelection = YES; [self presentViewController:p animated:YES completion:nil];
 }
-// keys.txt (validated like the Bergamot app: AES section, known key names, 32 hex digits each),
-// plus optional boot9.bin and otp.bin checked by size. Everything goes to Azahar's sysdata folder.
 - (void)installKeyFiles:(NSArray<NSURL*>*)urls {
-    NSMutableArray* done = [NSMutableArray new]; NSMutableArray* problems = [NSMutableArray new];
-    NSURL* sys = BGSysDataFolder();
-    for (NSURL* u in urls) {
-        NSString* name = u.lastPathComponent.lowercaseString; NSData* data = [NSData dataWithContentsOfURL:u];
-        if (!data) { [problems addObject:[NSString stringWithFormat:@"Couldn't read %@.", u.lastPathComponent]]; continue; }
-        if ([name hasSuffix:@".txt"]) {
-            // Accepts keys.txt or Citra's older aes_keys.txt; older files name the scrambler constant
-            // "generator", which Azahar calls "generatorConstant". Always saved as keys.txt, the only
-            // name this Azahar reads.
-            NSString* raw = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
-            NSRegularExpression* old = [NSRegularExpression regularExpressionWithPattern:@"(?m)^\\s*generator\\s*=" options:0 error:nil];
-            raw = [old stringByReplacingMatchesInString:raw options:0 range:NSMakeRange(0, raw.length) withTemplate:@"generatorConstant="];
-            NSString* keys = BGValidatedAESKeys([raw dataUsingEncoding:NSUTF8StringEncoding]);
-            if (!keys) { [problems addObject:[NSString stringWithFormat:@"%@ has a line that isn't a valid AES key.", u.lastPathComponent]]; continue; }
-            [keys writeToURL:[sys URLByAppendingPathComponent:@"keys.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            [done addObject:[NSString stringWithFormat:@"keys.txt (%lu keys)", (unsigned long)([keys componentsSeparatedByString:@"="].count - 1)]];
-        } else if ([name isEqualToString:@"boot9.bin"] || [name isEqualToString:@"otp.bin"]) {
-            const NSUInteger want = [name isEqualToString:@"otp.bin"] ? 256 : 65536;
-            if (data.length != want && !([name isEqualToString:@"boot9.bin"] && data.length == 32768)) {
-                [problems addObject:[NSString stringWithFormat:@"%@ is the wrong size.", u.lastPathComponent]]; continue;
-            }
-            [data writeToURL:[sys URLByAppendingPathComponent:name] atomically:YES]; [done addObject:name];
-        } else {
-            [problems addObject:[NSString stringWithFormat:@"%@ isn't keys.txt, boot9.bin or otp.bin.", u.lastPathComponent]];
-        }
-    }
-    NSMutableString* text = [NSMutableString new];
-    if (done.count) [text appendFormat:@"Installed %@.", [done componentsJoinedByString:@", "]];
-    if (done.count && BGGameRanThisLaunch) [text appendString:@" Close and reopen the app so they take effect."];
-    if (problems.count) [text appendFormat:@"%@%@", text.length ? @" " : @"", [problems componentsJoinedByString:@" "]];
-    _message.text = text;
-    if (problems.count && !done.count) BGAlert(self, @"Keys not installed", [problems componentsJoinedByString:@"\n"]);
+    NSArray<NSString*>* problems = nil;
+    _message.text = BGInstallKeyFiles(urls, BGGameRanThisLaunch, &problems);
+    if (problems.count) BGAlert(self, @"Keys not installed", [problems componentsJoinedByString:@"\n"]);
 }
 - (void)pick:(NSArray<NSString*>*)exts update:(BOOL)update {
     _pickingUpdate = update; _pickingKeys = NO;

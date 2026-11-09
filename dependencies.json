@@ -7,7 +7,8 @@
       "patches/0007-azahar-no-jit-build.patch",
       "patches/0008-azahar-libretro-async-shaders.patch",
       "patches/0009-azahar-libretro-shader-preparation.patch",
-      "patches/0010-azahar-batch-cro-cache-invalidation.patch"
+      "patches/0010-azahar-batch-cro-cache-invalidation.patch",
+      "patches/0011-azahar-restore-encrypted-content.patch"
     ]
   },
   "nxnative_research": {

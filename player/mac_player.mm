@@ -3,6 +3,11 @@
 #import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include "player_session.h"
+#import "user_keys.h"
+#import "key_import.h"
+
+// Azahar reads keys.txt once per launch, when the first game starts.
+static BOOL BGGameRanThisLaunch = NO;
 #include <map>
 
 static NSArray<NSString*>* BGGameExtensions() { return @[@"3ds", @"cci", @"cxi", @"cia", @"3dsx", @"app", @"elf", @"axf"]; }
@@ -153,6 +158,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     recentMenu.delegate = self;
     recent.submenu = recentMenu; [file addItem:recent];
     [file addItem:[self item:@"Install Update or DLC (.cia)…" action:@selector(installUpdate:) key:@"" tag:0]];
+    [file addItem:[self item:@"Install Keys…" action:@selector(installKeys:) key:@"" tag:0]];
     [file addItem:NSMenuItem.separatorItem];
     [file addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
     NSMenu* emu = [[NSMenu alloc] initWithTitle:@"Emulation"];
@@ -207,6 +213,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     _title = url.URLByDeletingPathExtension.lastPathComponent;
     _window.title = _title; _window.subtitle = @"Loading…"; _empty.hidden = YES; _keys = {};
     [self applySlots];
+    BGGameRanThisLaunch = YES;
     [_session run:url];
     // Controller-only play does not count as user activity, and an idle display dim makes macOS
     // withhold drawables for ~1 s mid-game. Hold the display awake for the session, as games do.
@@ -219,11 +226,23 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     (void)sender;
     NSOpenPanel* panel = [NSOpenPanel openPanel];
     UTType* cia = [UTType typeWithFilenameExtension:@"cia"]; if (cia) panel.allowedContentTypes = @[cia];
-    panel.message = @"Choose a decrypted update or DLC .cia";
+    panel.message = @"Choose an update or DLC .cia";
     [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
         if (r != NSModalResponseOK) return;
         self->_hint.stringValue = @"Installing…";
         [self->_session installPackage:panel.URL completion:^(NSString* message, BOOL failed) { self->_hint.stringValue = message; if (failed) [self alert:@"Install failed" message:message]; }];
+    }];
+}
+- (void)installKeys:(id)sender {
+    (void)sender;
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.allowsMultipleSelection = YES;
+    panel.message = @"Choose keys.txt or aes_keys.txt, and optionally boot9.bin and otp.bin";
+    [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
+        NSArray<NSString*>* problems = nil;
+        self->_hint.stringValue = BGInstallKeyFiles(panel.URLs, BGGameRanThisLaunch, &problems);
+        if (problems.count) [self alert:@"Keys not installed" message:[problems componentsJoinedByString:@"\n"]];
     }];
 }
 - (void)sessionEnded:(NSString*)message failed:(BOOL)failed {

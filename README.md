@@ -48,7 +48,8 @@ If you'd rather sideload, the unsigned `.ipa` works with AltStore or SideStore.
 Import games from the app's library, or drop them into
 **Files › On My iPhone › Bergamot 3DS › Games**.
 
-Supported files: `.3ds`, `.cci`, `.cxi`, `.3dsx`, and decrypted `.cia`. Saves
+Supported files: `.3ds`, `.cci`, `.cxi`, `.3dsx` and `.cia`. Encrypted games work
+with your own `keys.txt`: **File › Install Keys…** on Mac, **Keys** on iPhone. Saves
 are kept automatically.
 
 ### Settings
@@ -74,8 +75,9 @@ We couldn't have built this without it, and the credit for running your games
 belongs to the people who work on it.
 
 Our patches add the Mac/iOS-specific parts: frame handoff into Metal, a build
-with every JIT removed, shader-cache preparation, and a fix for half-second
-freezes when games load code modules. They're described in
+with every JIT removed, shader-cache preparation, a fix for half-second
+freezes when games load code modules, and encrypted-game support, which Azahar
+removed upstream. They're described in
 [docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md), and most of them work on plain
 Azahar too.
 

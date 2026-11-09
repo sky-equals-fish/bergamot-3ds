@@ -12,6 +12,7 @@ submitted upstream.
 | `0008-azahar-libretro-async-shaders` | Exposes the renderer's existing async pipeline compilation as the libretro option `citra_async_shader_compilation` (default off) | Lets a host opt into compiling new pipelines on worker threads |
 | `0009-azahar-libretro-shader-preparation` | Reports disk shader-cache progress to the host (`ctr_set_shader_progress`) and adds `ctr_wait_shader_cache()`, which waits until every cached shader and pipeline is built | "Preparing shaders": play starts only once everything the cache knows is ready |
 | `0010-azahar-batch-cro-cache-invalidation` | Batches instruction-cache invalidation during CRO (code module) loading: one pass per run of touched 4 KiB pages instead of one full block-cache scan per relocation | Removed 0.7–0.9 s freezes when games load modules (measured on a Mac host) |
+| `0011-azahar-restore-encrypted-content` | Restores the NCCH decryption Azahar removed upstream (Citra's implementation: key slots, seeds, ExeFS and RomFS counters), lets CIA installs decrypt with the user's keys, and makes ECC verification fail cleanly when `keys.txt` has no ECC root key | Encrypted `.cia` and `.3ds` files play with the user's own `keys.txt` |
 
 ## Using the patches without Bergamot
 
@@ -23,7 +24,7 @@ git checkout 6b4e7f2e694514fdf2f72dc20368609b7cd4912e
 git submodule update --init --recursive
 for p in 0001-libretro-frame-synchronization 0007-azahar-no-jit-build \
          0008-azahar-libretro-async-shaders 0009-azahar-libretro-shader-preparation \
-         0010-azahar-batch-cro-cache-invalidation; do
+         0010-azahar-batch-cro-cache-invalidation 0011-azahar-restore-encrypted-content; do
   git apply "/path/to/bergamot-3ds/patches/$p.patch"
 done
 ```

@@ -1,6 +1,6 @@
 # Bergamot 3DS status
 
-Last updated 2026-11-08. Covers the 3DS core and the Bergamot 3DS app only.
+Last updated 2026-11-09. Covers the 3DS core and the Bergamot 3DS app only.
 
 ## Tested
 
@@ -9,15 +9,17 @@ Last updated 2026-11-08. Covers the 3DS core and the Bergamot 3DS app only.
   patch 0010, 3 of 5 runs had a 0.7–0.9 s freeze when the game loaded a code module.
 - **Mac, homebrew probe.** The standalone example runs an original ARM11 test program
   and passes with a test hook that fails on any executable-memory request.
-- **Builds.** The no-JIT core builds for macOS, iPhoneOS and iOS Simulator. The five
+- **Builds.** The no-JIT core builds for macOS, iPhoneOS and iOS Simulator. The six
   patches apply in order to a clean Azahar checkout at the pinned commit.
 - **iPhone 15 Pro, earlier core build.** Alpha Sapphire booted at 4× near 100% guest
   speed; the queue-ordered handoff roughly halved per-frame work on the emulation
   thread. Details in [PRESENTATION_SYNC_EXPERIMENT.md](PRESENTATION_SYNC_EXPERIMENT.md).
+- **Mac, encrypted CIA (patch 0011).** An encrypted Alpha Sapphire `.cia` installs, decrypts
+  with the user's `keys.txt`, and runs at 59.8 fps / 100% speed.
 
 ## Not tested yet
 
-- The current core (patches 0008–0010) and the Bergamot 3DS app on a physical iPhone.
+- The current core (patches 0008–0011) and the Bergamot 3DS app on a physical iPhone.
 - 3DS rendering in iOS Simulator, which hits a MoltenVK assertion at startup.
 - Long sessions, thermals, and games beyond the ones above.
 - A notarized Mac build.
@@ -26,5 +28,6 @@ Last updated 2026-11-08. Covers the 3DS core and the Bergamot 3DS app only.
 
 - An effect seen for the very first time can still pause the game once while its
   shader compiles. It is cached after that.
-- Encrypted `.cia` files are not supported; use decrypted copies.
+- Encrypted games need the user's `keys.txt`. A `keys.txt` built from `boot9.bin` alone has no
+  ECC root key, so `otp.bin` is ignored; games don't need it.
 - The C++ API is tied to the toolchain. There is no stable C ABI or XCFramework yet.

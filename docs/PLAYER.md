@@ -16,10 +16,12 @@ your team under Signing & Capabilities, press Run), or sideload the unsigned
 Bergamot 3DS › Games**. The library shows each game's own icon and title, with
 search. Tap a game to play; HOME opens the pause menu.
 
-Supported files are `.3ds`, `.cci`, `.cxi`, `.3dsx` and decrypted `.cia`.
+Supported files are `.3ds`, `.cci`, `.cxi`, `.3dsx` and `.cia`. Encrypted games need your
+console's `keys.txt`.
 Updates and DLC go through **File › Install Update or DLC** on Mac, or
-**Update** on iPhone. On iPhone, **Keys** installs your `keys.txt` (and optionally
-`boot9.bin` and `otp.bin`) into Azahar's `sysdata` folder after checking them. Save in the game before you stop it.
+**Update** on iPhone. **File › Install Keys…** on Mac, or **Keys** on iPhone, installs your
+`keys.txt` or `aes_keys.txt` (and optionally `boot9.bin` and `otp.bin`) into Azahar's `sysdata`
+folder after checking them. Install keys before the first game of a launch; the core reads them once. Save in the game before you stop it.
 
 | Mac keys | 3DS |
 | --- | --- |

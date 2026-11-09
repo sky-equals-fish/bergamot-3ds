@@ -215,6 +215,7 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
     dispatch_async(dispatch_get_main_queue(), ^{ if (self.loadingChanged) self.loadingChanged(message); });
 }
 - (void)finish:(NSString*)message failed:(BOOL)failed {
+    std::fprintf(stderr, "BG_SESSION_END failed=%d message=%s\n", failed ? 1 : 0, message.UTF8String ?: "");
     dispatch_async(dispatch_get_main_queue(), ^{ self->_running = NO; if (self.ended) self.ended(message, failed); });
 }
 - (void)installPackage:(NSURL*)package completion:(void (^)(NSString*, BOOL))completion {
@@ -226,7 +227,7 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
         try {
             ctr::Runtime runtime(root);
             const auto info = runtime.inspect(package.fileSystemRepresentation);
-            if (info.cia_content_encrypted) throw std::runtime_error("This CIA is encrypted. Use a decrypted export from your console.");
+            (void)info;   // encrypted CIAs are decrypted during install with the user's keys (patch 0011)
             runtime.install_package(package.fileSystemRepresentation);
             message = [NSString stringWithFormat:@"Installed %@", package.lastPathComponent];
         } catch (const std::exception& e) { message = [NSString stringWithUTF8String:e.what()]; failed = YES; }
@@ -276,7 +277,6 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                 std::filesystem::path launch(game.fileSystemRepresentation);
                 if ([game.pathExtension.lowercaseString isEqualToString:@"cia"]) {
                     const auto info = runtime.inspect(launch);
-                    if (info.cia_content_encrypted) throw std::runtime_error("This CIA is encrypted. Use a decrypted export from your console.");
                     if ((info.title_id >> 32) != 0x00040000) throw std::runtime_error("This CIA is an update or DLC. Install it with Install Update, then open the base game.");
                     if (NSString* installed = BGInstalledContent(game)) {
                         launch = installed.fileSystemRepresentation;      // already installed: skip the copy

@@ -1,0 +1,485 @@
+diff --git a/src/citra_libretro/ctr_bridge.cpp b/src/citra_libretro/ctr_bridge.cpp
+index 6f756f9..0ed70ad 100644
+--- a/src/citra_libretro/ctr_bridge.cpp
++++ b/src/citra_libretro/ctr_bridge.cpp
+@@ -46,7 +46,7 @@ extern "C" int ctr_install_cia(const char* path, char* output, size_t capacity)
+         ctr_content_info info{};
+         const auto inspected = ctr_inspect_content(path, &info);
+         if (inspected || !info.is_cia) return -2;
+-        if (info.cia_content_encrypted) return static_cast<int>(Service::AM::InstallStatus::ErrorEncrypted);
++        // Bergamot: encrypted CIAs are decrypted during install with the user's keys.
+         LibRetro::ParseCoreOptions(); // Establish the host's isolated storage path.
+         const auto result = Service::AM::InstallCIA(path, {});
+         if (result != Service::AM::InstallStatus::Success) return static_cast<int>(result);
+diff --git a/src/core/file_sys/ncch_container.cpp b/src/core/file_sys/ncch_container.cpp
+index bf4abb0..c0973ba 100644
+--- a/src/core/file_sys/ncch_container.cpp
++++ b/src/core/file_sys/ncch_container.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include <cstring>
+ #include <memory>
++#include <optional>
+ #include <span>
+ #include <cryptopp/aes.h>
+ #include <cryptopp/modes.h>
+@@ -258,11 +259,6 @@ Loader::ResultStatus NCCHContainer::LoadHeader() {
+ 
+     LOG_DEBUG(Service_FS, "NCCH type: {}", file->GetType().to_string());
+ 
+-    if (!ncch_header.no_crypto) {
+-        // Encrypted NCCH are not supported
+-        return Loader::ResultStatus::ErrorEncrypted;
+-    }
+-
+     has_header = true;
+     return Loader::ResultStatus::Success;
+ }
+@@ -289,9 +285,117 @@ Loader::ResultStatus NCCHContainer::Load() {
+             block_size = 1;
+         }
+ 
++        // Bergamot: decrypt encrypted NCCH with the user's keys (Citra's implementation, restored).
++        bool failed_to_decrypt = false;
+         if (!ncch_header.no_crypto) {
+-            // Encrypted NCCH are not supported
+-            return Loader::ResultStatus::ErrorEncrypted;
++            is_encrypted = true;
++
++            // Find primary and secondary keys
++            if (ncch_header.fixed_key) {
++                LOG_DEBUG(Service_FS, "Fixed-key crypto");
++                primary_key.fill(0);
++                secondary_key.fill(0);
++            } else {
++                using namespace HW::AES;
++                InitKeys();
++                std::array<u8, 16> key_y_primary, key_y_secondary;
++
++                std::copy(ncch_header.signature, ncch_header.signature + key_y_primary.size(),
++                          key_y_primary.begin());
++
++                if (!ncch_header.seed_crypto) {
++                    key_y_secondary = key_y_primary;
++                } else {
++                    auto opt{FileSys::GetSeed(ncch_header.program_id)};
++                    if (!opt.has_value()) {
++                        LOG_ERROR(Service_FS, "Seed for program {:016X} not found",
++                                  ncch_header.program_id);
++                        failed_to_decrypt = true;
++                    } else {
++                        auto seed{*opt};
++                        std::array<u8, 32> input;
++                        std::memcpy(input.data(), key_y_primary.data(), key_y_primary.size());
++                        std::memcpy(input.data() + key_y_primary.size(), seed.data(), seed.size());
++                        CryptoPP::SHA256 sha;
++                        std::array<u8, CryptoPP::SHA256::DIGESTSIZE> hash;
++                        sha.CalculateDigest(hash.data(), input.data(), input.size());
++                        std::memcpy(key_y_secondary.data(), hash.data(), key_y_secondary.size());
++                    }
++                }
++
++                SetKeyY(KeySlotID::NCCHSecure1, key_y_primary);
++                if (!IsNormalKeyAvailable(KeySlotID::NCCHSecure1)) {
++                    LOG_ERROR(Service_FS, "Secure1 KeyX missing");
++                    failed_to_decrypt = true;
++                }
++                primary_key = GetNormalKey(KeySlotID::NCCHSecure1);
++
++                const auto secondary_slot = [&]() -> std::optional<KeySlotID> {
++                    switch (ncch_header.secondary_key_slot) {
++                    case 0:
++                        return KeySlotID::NCCHSecure1;
++                    case 1:
++                        return KeySlotID::NCCHSecure2;
++                    case 10:
++                        return KeySlotID::NCCHSecure3;
++                    case 11:
++                        return KeySlotID::NCCHSecure4;
++                    default:
++                        return std::nullopt;
++                    }
++                }();
++                if (!secondary_slot) {
++                    LOG_ERROR(Service_FS, "Unknown secondary key slot {}",
++                              ncch_header.secondary_key_slot);
++                    failed_to_decrypt = true;
++                } else {
++                    SetKeyY(*secondary_slot, key_y_secondary);
++                    if (!IsNormalKeyAvailable(*secondary_slot)) {
++                        LOG_ERROR(Service_FS, "Secondary KeyX missing (slot type {})",
++                                  ncch_header.secondary_key_slot);
++                        failed_to_decrypt = true;
++                    }
++                    secondary_key = GetNormalKey(*secondary_slot);
++                }
++            }
++
++            // Find CTR for each section. Written with reference to
++            // https://github.com/d0k3/GodMode9/blob/99af6a73be48fa7872649aaa7456136da0df7938/arm9/source/game/ncch.c#L34-L52
++            if (ncch_header.version == 0 || ncch_header.version == 2) {
++                // CTR for each section is a magic number prefixed by partition ID (reverse order)
++                std::reverse_copy(ncch_header.partition_id, ncch_header.partition_id + 8,
++                                  exheader_ctr.begin());
++                exefs_ctr = romfs_ctr = exheader_ctr;
++                exheader_ctr[8] = 1;
++                exefs_ctr[8] = 2;
++                romfs_ctr[8] = 3;
++            } else if (ncch_header.version == 1) {
++                // CTR for each section is the section offset prefixed by partition ID, as if the
++                // entire NCCH image is encrypted using a single CTR stream.
++                std::copy(ncch_header.partition_id, ncch_header.partition_id + 8,
++                          exheader_ctr.begin());
++                exefs_ctr = romfs_ctr = exheader_ctr;
++                auto u32ToBEArray = [](u32 value) -> std::array<u8, 4> {
++                    return std::array<u8, 4>{
++                        static_cast<u8>(value >> 24),
++                        static_cast<u8>((value >> 16) & 0xFF),
++                        static_cast<u8>((value >> 8) & 0xFF),
++                        static_cast<u8>(value & 0xFF),
++                    };
++                };
++                auto offset_exheader = u32ToBEArray(0x200); // exheader offset
++                auto offset_exefs = u32ToBEArray(ncch_header.exefs_offset * block_size);
++                auto offset_romfs = u32ToBEArray(ncch_header.romfs_offset * block_size);
++                std::copy(offset_exheader.begin(), offset_exheader.end(),
++                          exheader_ctr.begin() + 12);
++                std::copy(offset_exefs.begin(), offset_exefs.end(), exefs_ctr.begin() + 12);
++                std::copy(offset_romfs.begin(), offset_romfs.end(), romfs_ctr.begin() + 12);
++            } else {
++                LOG_ERROR(Service_FS, "Unknown NCCH version {}", ncch_header.version);
++                failed_to_decrypt = true;
++            }
++        } else {
++            is_encrypted = false;
+         }
+ 
+         // System archives and DLC don't have an extended header but have RomFS
+@@ -307,6 +411,26 @@ Loader::ResultStatus NCCHContainer::Load() {
+                 return Loader::ResultStatus::Error;
+             }
+ 
++            if (is_encrypted) {
++                // This ID check is masked to low 32-bit as a toleration to ill-formed ROM created
++                // by merging games and its updates.
++                if ((exheader_header.system_info.jump_id & 0xFFFFFFFF) ==
++                    (ncch_header.program_id & 0xFFFFFFFF)) {
++                    LOG_WARNING(Service_FS, "NCCH is marked as encrypted but with decrypted "
++                                            "exheader. Force no crypto scheme.");
++                    is_encrypted = false;
++                } else {
++                    if (failed_to_decrypt) {
++                        LOG_ERROR(Service_FS, "Failed to decrypt: check keys.txt (and seeddb.bin)");
++                        return Loader::ResultStatus::ErrorEncrypted;
++                    }
++                    CryptoPP::byte* data = reinterpret_cast<CryptoPP::byte*>(&exheader_header);
++                    CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption(
++                        primary_key.data(), primary_key.size(), exheader_ctr.data())
++                        .ProcessData(data, data, sizeof(exheader_header));
++                }
++            }
++
+             const auto mods_path =
+                 fmt::format("{}mods/{:016X}/", FileUtil::GetUserPath(FileUtil::UserPath::LoadDir),
+                             GetModId(ncch_header.program_id));
+@@ -364,6 +488,11 @@ Loader::ResultStatus NCCHContainer::Load() {
+             has_exheader = true;
+         }
+ 
++        if (is_encrypted && failed_to_decrypt) {
++            LOG_ERROR(Service_FS, "Failed to decrypt: check keys.txt (and seeddb.bin)");
++            return Loader::ResultStatus::ErrorEncrypted;
++        }
++
+         // DLC can have an ExeFS and a RomFS but no extended header
+         if (ncch_header.exefs_size) {
+             u32 exefs_offset = ncch_header.exefs_offset * block_size;
+@@ -379,6 +508,13 @@ Loader::ResultStatus NCCHContainer::Load() {
+                 sizeof(ExeFs_Header))
+                 return Loader::ResultStatus::Error;
+ 
++            if (is_encrypted) {
++                CryptoPP::byte* data = reinterpret_cast<CryptoPP::byte*>(&exefs_header);
++                CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption(primary_key.data(),
++                                                              primary_key.size(), exefs_ctr.data())
++                    .ProcessData(data, data, sizeof(exefs_header));
++            }
++
+             has_exefs = true;
+         }
+ 
+@@ -501,12 +637,26 @@ Loader::ResultStatus NCCHContainer::LoadSectionExeFS(const char* name, std::vect
+ 
+             size_t section_size = is_proto ? Common::AlignUp(section.size, 0x10) : section.size;
+ 
++            // Icon and banner use the primary key; everything else the secondary key.
++            const auto& key = (strcmp(section.name, "icon") == 0 || strcmp(section.name, "banner") == 0)
++                                  ? primary_key
++                                  : secondary_key;
++            const auto decrypt = [&](u8* data, std::size_t size) {
++                if (!is_encrypted || is_proto || size == 0)
++                    return;
++                CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption dec(key.data(), key.size(),
++                                                                  exefs_ctr.data());
++                dec.Seek(section.offset + sizeof(ExeFs_Header));
++                dec.ProcessData(data, data, size);
++            };
++
+             if (strcmp(section.name, ".code") == 0 && is_compressed) {
+                 // Section is compressed, read compressed .code section...
+                 std::vector<u8> temp_buffer(section_size);
+                 if (exefs_file->ReadBytes(temp_buffer.data(), temp_buffer.size()) !=
+                     temp_buffer.size())
+                     return Loader::ResultStatus::Error;
++                decrypt(temp_buffer.data(), section.size);
+ 
+                 // Decompress .code section...
+                 buffer.resize(LZSS_GetDecompressedSize(temp_buffer));
+@@ -518,6 +668,7 @@ Loader::ResultStatus NCCHContainer::LoadSectionExeFS(const char* name, std::vect
+                 buffer.resize(section_size);
+                 if (exefs_file->ReadBytes(buffer.data(), section_size) != section_size)
+                     return Loader::ResultStatus::Error;
++                decrypt(buffer.data(), section.size);
+             }
+ 
+             return Loader::ResultStatus::Success;
+@@ -655,9 +806,13 @@ Loader::ResultStatus NCCHContainer::ReadRomFS(std::shared_ptr<RomFSReader>& romf
+     if (!romfs_file_inner->IsOpen())
+         return Loader::ResultStatus::Error;
+ 
++    auto romfs_sub = std::make_unique<FileUtil::SubIOFile>(std::move(romfs_file_inner),
++                                                           romfs_offset, romfs_size);
++    // The RomFS CTR stream starts at the section start; the first 0x1000 bytes are skipped above.
+     std::shared_ptr<RomFSReader> direct_romfs =
+-        std::make_shared<DirectRomFSReader>(std::make_unique<FileUtil::SubIOFile>(
+-            std::move(romfs_file_inner), romfs_offset, romfs_size));
++        is_encrypted ? std::make_shared<DirectRomFSReader>(std::move(romfs_sub), secondary_key,
++                                                           romfs_ctr, 0x1000)
++                     : std::make_shared<DirectRomFSReader>(std::move(romfs_sub));
+ 
+     const auto path =
+         fmt::format("{}mods/{:016X}/", FileUtil::GetUserPath(FileUtil::UserPath::LoadDir),
+diff --git a/src/core/file_sys/ncch_container.h b/src/core/file_sys/ncch_container.h
+index 1ae7aad..c73651b 100644
+--- a/src/core/file_sys/ncch_container.h
++++ b/src/core/file_sys/ncch_container.h
+@@ -380,6 +380,14 @@ private:
+ 
+     bool is_ncsd = false;
+     bool is_proto = false;
++
++    // Bergamot: NCCH content decryption (restored from Citra), keys from sysdata/keys.txt.
++    bool is_encrypted = false;
++    std::array<u8, 16> primary_key{};   // exheader, ExeFS header, icon/banner
++    std::array<u8, 16> secondary_key{}; // .code and RomFS
++    std::array<u8, 16> exheader_ctr{};
++    std::array<u8, 16> exefs_ctr{};
++    std::array<u8, 16> romfs_ctr{};
+     bool is_tainted = false; // Are there parts of this container being overridden?
+     bool is_loaded = false;
+     bool is_compressed = false;
+diff --git a/src/core/file_sys/romfs_reader.cpp b/src/core/file_sys/romfs_reader.cpp
+index 40297f9..029042f 100644
+--- a/src/core/file_sys/romfs_reader.cpp
++++ b/src/core/file_sys/romfs_reader.cpp
+@@ -18,6 +18,14 @@ SERIALIZE_EXPORT_IMPL(FileSys::DirectRomFSReader)
+ 
+ namespace FileSys {
+ 
++void DirectRomFSReader::Decrypt(u8* data, std::size_t length, std::size_t offset) const {
++    if (!is_encrypted || length == 0)
++        return;
++    CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption d(key.data(), key.size(), ctr.data());
++    d.Seek(crypto_offset + offset);
++    d.ProcessData(data, data, length);
++}
++
+ std::size_t DirectRomFSReader::ReadFile(std::size_t offset, std::size_t length, u8* buffer) {
+     length = std::min(length, GetSize() - offset);
+     if (length == 0)
+@@ -29,6 +37,7 @@ std::size_t DirectRomFSReader::ReadFile(std::size_t offset, std::size_t length,
+     // Skip cache if the read is too big
+     if (segments.size() == 1 && segments[0].second > cache_line_size) {
+         length = file->ReadAtBytes(buffer, length, offset);
++        Decrypt(buffer, length, offset);
+         LOG_TRACE(Service_FS, "RomFS Cache SKIP: offset={}, length={}", offset, length);
+         return length;
+     }
+@@ -43,6 +52,7 @@ std::size_t DirectRomFSReader::ReadFile(std::size_t offset, std::size_t length,
+         if (!cache_entry.first) {
+             // If not found, read from disk and cache the data
+             read_size = file->ReadAtBytes(cache_entry.second.data(), read_size, page);
++            Decrypt(cache_entry.second.data(), read_size, page);
+             LOG_TRACE(Service_FS, "RomFS Cache MISS: page={}, length={}, into={}", page, seg.second,
+                       (seg.first - page));
+         } else {
+diff --git a/src/core/file_sys/romfs_reader.h b/src/core/file_sys/romfs_reader.h
+index b0e4930..7ad8c0b 100644
+--- a/src/core/file_sys/romfs_reader.h
++++ b/src/core/file_sys/romfs_reader.h
+@@ -47,6 +47,13 @@ class DirectRomFSReader : public RomFSReader {
+ public:
+     DirectRomFSReader(std::unique_ptr<FileUtil::IOFileBase>&& file) : file(std::move(file)) {}
+ 
++    // Bergamot: encrypted NCCH RomFS, decrypted with AES-CTR as it is read (restored from Citra).
++    // crypto_offset is the position of byte 0 of `file` within the section's CTR stream.
++    DirectRomFSReader(std::unique_ptr<FileUtil::IOFileBase>&& file, const std::array<u8, 16>& key,
++                      const std::array<u8, 16>& ctr, std::size_t crypto_offset)
++        : file(std::move(file)), is_encrypted(true), key(key), ctr(ctr),
++          crypto_offset(crypto_offset) {}
++
+     ~DirectRomFSReader() override = default;
+ 
+     std::size_t GetSize() const override {
+@@ -61,6 +68,12 @@ public:
+ 
+ private:
+     std::unique_ptr<FileUtil::IOFileBase> file;
++    bool is_encrypted = false;
++    std::array<u8, 16> key{};
++    std::array<u8, 16> ctr{};
++    u64 crypto_offset = 0;
++
++    void Decrypt(u8* data, std::size_t length, std::size_t offset) const;
+ 
+     // Total cache size: 128KB
+     static constexpr std::size_t cache_line_size = (1 << 13); // About 8KB
+@@ -83,6 +96,10 @@ private:
+     void serialize(Archive& ar, const unsigned int) {
+         ar& boost::serialization::base_object<RomFSReader>(*this);
+         ar & file;
++        ar & is_encrypted;
++        ar & key;
++        ar & ctr;
++        ar & crypto_offset;
+     }
+     friend class boost::serialization::access;
+ };
+diff --git a/src/core/hle/service/am/am.cpp b/src/core/hle/service/am/am.cpp
+index a7b88ff..46ef4f6 100644
+--- a/src/core/hle/service/am/am.cpp
++++ b/src/core/hle/service/am/am.cpp
+@@ -484,6 +484,11 @@ void CIAFile::AuthorizeDecryptionFromHLE() {
+     do_signature_checks = true;
+ }
+ 
++void CIAFile::AuthorizeHostDecryption() {
++    decryption_authorized = true;
++    host_plain_output = true;
++}
++
+ CIAFile::CIAFile(Core::System& system_, Service::FS::MediaType media_type, bool from_cdn_)
+     : system(system_), from_cdn(from_cdn_), decryption_authorized(false), media_type(media_type),
+       decryption_state(std::make_unique<DecryptionState>()),
+@@ -727,7 +732,8 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
+                 }
+                 current_content_index = static_cast<u16>(i);
+                 current_content_file =
+-                    std::make_unique<NCCHCryptoFile>(content_file_paths[i], decryption_authorized);
++                    std::make_unique<NCCHCryptoFile>(content_file_paths[i],
++                                                     decryption_authorized && !host_plain_output);
+                 current_content_file->decryption_authorized = decryption_authorized;
+ 
+                 current_content_install_result.type = InstallResult::Type::APP;
+@@ -1018,7 +1024,7 @@ ResultVal<std::size_t> CIAFile::WriteContentDataIndexed(u16 content_index, u64 o
+ 
+         current_content_index = content_index;
+         current_content_file = std::make_unique<NCCHCryptoFile>(content_file_paths[content_index],
+-                                                                decryption_authorized);
++                                                                decryption_authorized && !host_plain_output);
+         current_content_file->decryption_authorized = decryption_authorized;
+ 
+         current_content_install_result.type = InstallResult::Type::APP;
+@@ -1490,10 +1496,8 @@ InstallStatus InstallCIA(const std::string& path,
+                 Core::System::GetInstance(),
+                 Service::AM::GetTitleMediaType(container.GetTitleMetadata().GetTitleID()));
+ 
+-            if (container.GetTitleMetadata().HasEncryptedContent(container.GetHeader())) {
+-                LOG_ERROR(Service_AM, "File {} is encrypted! Aborting...", path);
+-                return InstallStatus::ErrorEncrypted;
+-            }
++            // Bergamot: decrypt with the user's keys instead of refusing encrypted CIAs.
++            installFile.AuthorizeHostDecryption();
+ 
+             std::vector<u8> buffer;
+             buffer.resize(0x10000);
+@@ -1612,10 +1616,7 @@ InstallStatus CheckCIAToInstall(const std::string& path, bool& is_compressed, bo
+         in_file->Seek(0, SEEK_SET);
+         const FileSys::TitleMetadata& tmd = container.GetTitleMetadata();
+ 
+-        if (tmd.HasEncryptedContent(container.GetHeader())) {
+-            return InstallStatus::ErrorEncrypted;
+-        }
+-
++        // Bergamot: encrypted content is decrypted at install with the user's keys.
+         for (size_t i = 0; i < tmd.GetContentCount(); i++) {
+             u64 offset = container.GetContentOffset(i);
+             NCCH_Header ncch;
+@@ -1626,9 +1627,7 @@ InstallStatus CheckCIAToInstall(const std::string& path, bool& is_compressed, bo
+             if (ncch.magic != FileUtil::MakeMagic('N', 'C', 'C', 'H')) {
+                 return InstallStatus::ErrorInvalid;
+             }
+-            if (!ncch.no_crypto) {
+-                return InstallStatus::ErrorEncrypted;
+-            }
++            // Bergamot: NCCH-encrypted content is also decrypted at install.
+         }
+ 
+         return InstallStatus::Success;
+diff --git a/src/core/hle/service/am/am.h b/src/core/hle/service/am/am.h
+index bb3e9ae..0da29ac 100644
+--- a/src/core/hle/service/am/am.h
++++ b/src/core/hle/service/am/am.h
+@@ -268,6 +268,10 @@ public:
+     }
+ 
+     void AuthorizeDecryptionFromHLE();
++    // Bergamot: a CIA the user installs from their own files. Title-key and NCCH decryption are
++    // allowed with the user's keys and the result is stored as a plain decrypted NCCH in the app's
++    // own storage (no console-unique wrapper, no forced signature checks for self-built CIAs).
++    void AuthorizeHostDecryption();
+ 
+     bool SignatureChecksEnabed() const {
+         return do_signature_checks;
+@@ -289,6 +293,7 @@ private:
+ 
+     bool decryption_authorized;
+     bool do_signature_checks = false;
++    bool host_plain_output = false; // Bergamot: see AuthorizeHostDecryption()
+ 
+     bool is_done = false;
+     bool is_closed = false;
+diff --git a/src/core/hw/ecc.cpp b/src/core/hw/ecc.cpp
+index 7e52b45..8abb81b 100644
+--- a/src/core/hw/ecc.cpp
++++ b/src/core/hw/ecc.cpp
+@@ -182,11 +182,24 @@ Signature Sign(std::span<const u8> data, PrivateKey private_key) {
+ }
+ 
+ bool Verify(std::span<const u8> data, Signature signature, PublicKey public_key) {
+-    CryptoPP::ECDSA<CryptoPP::EC2N, CryptoPP::SHA256>::Verifier verifier(
+-        public_key.AsCryptoPPPublicKey());
+-
+-    return verifier.VerifyMessage(data.data(), data.size(), signature.rs.data(),
+-                                  signature.rs.size());
++    // Bergamot: a keys.txt without the ECC root key leaves an all-zero public key, which
++    // Crypto++ rejects by throwing. Treat that as a failed verification instead of aborting
++    // whatever load path asked (for example OTP loading while opening a game).
++    try {
++        CryptoPP::ECDSA<CryptoPP::EC2N, CryptoPP::SHA256>::Verifier verifier(
++            public_key.AsCryptoPPPublicKey());
++
++        return verifier.VerifyMessage(data.data(), data.size(), signature.rs.data(),
++                                      signature.rs.size());
++    } catch (const CryptoPP::Exception& e) {
++        static bool logged = false;
++        if (!logged) {
++            logged = true;
++            LOG_ERROR(HW, "ECC verification unavailable (keys.txt has no ECC root key?): {}",
++                      e.what());
++        }
++        return false;
++    }
+ }
+ 
+ std::vector<u8> Agree(PrivateKey private_key, PublicKey others_public_key) {
