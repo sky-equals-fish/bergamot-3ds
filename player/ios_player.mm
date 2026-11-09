@@ -16,6 +16,7 @@ static UIImage* BGAsset(NSString* name, NSInteger frame) {
 }
 static void BGNearest(UIView* v) { v.layer.magnificationFilter = kCAFilterNearest; v.layer.minificationFilter = kCAFilterNearest; }
 #import "pixel_controls.h"
+#include "game_art.hpp"
 
 static NSArray<NSString*>* BGGameExtensions() { return @[@"3ds", @"cci", @"cxi", @"cia", @"3dsx"]; }
 static NSURL* BGGamesFolder() {
@@ -138,71 +139,194 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
 - (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
 @end
 
-@interface BGGamesController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIDocumentPickerDelegate>
+// Bergamot-style library: Bergie, pixel lettering, panel buttons, search and library-row tiles
+// showing each game's own icon and title. A basic version of the Bergamot app's library.
+static UIColor* BGInk() { return BGColor(@"EBF1E9"); }
+static UIColor* BGAccent() { return BGColor(@"65E5E3"); }
+static UIImage* BGSurface(NSString* name, NSInteger frame) { return [BGAsset(name, frame) resizableImageWithCapInsets:UIEdgeInsetsMake(8, 8, 8, 8) resizingMode:UIImageResizingModeStretch]; }
+
+@interface BGPixelLabel : UILabel
 @end
-@implementation BGGamesController {
-    UITableView* _table; NSArray<NSURL*>* _games; UILabel* _message; UISegmentedControl* _scale; BOOL _pickingUpdate;
+@implementation BGPixelLabel
+- (void)drawTextInRect:(CGRect)rect {
+    NSString* chars = @"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:/-.+<>!? "; NSString* text = self.text.uppercaseString;
+    UIImage* font = BGAsset(@"font", 0); if (!font) { [super drawTextInRect:rect]; return; }
+    const CGFloat scale = MAX(1, round(self.font.pointSize / 8)), advance = 6 * scale;
+    CGFloat x = rect.origin.x; const CGFloat y = rect.origin.y + MAX(0, (rect.size.height - 7 * scale) / 2);
+    CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationNone);
+    for (NSUInteger i = 0; i < text.length && x + advance <= CGRectGetMaxX(rect); ++i) {
+        NSRange found = [chars rangeOfString:[text substringWithRange:NSMakeRange(i, 1)]];
+        if (found.location == NSNotFound) found = [chars rangeOfString:@"?"];
+        CGImageRef glyph = CGImageCreateWithImageInRect(font.CGImage, CGRectMake(found.location * 8, 0, 6, 8));
+        [[UIImage imageWithCGImage:glyph] drawInRect:CGRectMake(x, y, 6 * scale, 8 * scale)]; CGImageRelease(glyph); x += advance;
+    }
 }
-- (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
-- (UIButton*)button:(NSString*)title action:(SEL)action {
-    UIButtonConfiguration* c = [UIButtonConfiguration filledButtonConfiguration];
-    c.title = title; c.baseBackgroundColor = BGColor(@"1F2C3A"); c.baseForegroundColor = BGColor(@"5EE6E6");
-    c.cornerStyle = UIButtonConfigurationCornerStyleSmall;
-    UIButton* b = [UIButton buttonWithConfiguration:c primaryAction:nil]; [b addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+@end
+
+static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
+    UIButton* b = [UIButton buttonWithType:UIButtonTypeCustom];
+    [b setBackgroundImage:BGSurface(@"panel", 0) forState:UIControlStateNormal];
+    [b setBackgroundImage:BGSurface(@"panel", 2) forState:UIControlStateHighlighted];
+    BGPixelLabel* label = [BGPixelLabel new]; label.text = title; label.font = [UIFont systemFontOfSize:16]; label.userInteractionEnabled = NO;
+    label.translatesAutoresizingMaskIntoConstraints = NO; [b addSubview:label];
+    [NSLayoutConstraint activateConstraints:@[[label.centerXAnchor constraintEqualToAnchor:b.centerXAnchor], [label.centerYAnchor constraintEqualToAnchor:b.centerYAnchor],
+        [label.widthAnchor constraintEqualToConstant:title.length * 12 + 2], [label.heightAnchor constraintEqualToConstant:20], [b.heightAnchor constraintEqualToConstant:44]]];
+    b.accessibilityLabel = title.capitalizedString; BGNearest(b); [b addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     return b;
 }
+
+@interface BGGameTile : UICollectionViewCell
+@property(nonatomic, strong) UIImageView *frameView, *icon;
+@property(nonatomic, strong) UILabel *title, *detail;
+@property(nonatomic, strong) UIView* rule;
+@end
+@implementation BGGameTile
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        _frameView = [UIImageView new]; BGNearest(_frameView); [self.contentView addSubview:_frameView];
+        _icon = [UIImageView new]; BGNearest(_icon); _icon.contentMode = UIViewContentModeScaleAspectFit; [self.contentView addSubview:_icon];
+        _title = [UILabel new]; _title.font = [UIFont monospacedSystemFontOfSize:15 weight:UIFontWeightSemibold]; _title.textColor = BGInk(); [self.contentView addSubview:_title];
+        _detail = [UILabel new]; _detail.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular]; _detail.textColor = BGAccent(); [self.contentView addSubview:_detail];
+        _rule = [UIView new]; _rule.backgroundColor = [BGAccent() colorWithAlphaComponent:.6]; [self.contentView addSubview:_rule];
+        [self refreshState];
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    const CGSize s = self.contentView.bounds.size; const CGFloat art = MIN(56, s.height - 24);
+    _frameView.frame = self.contentView.bounds;
+    _icon.frame = CGRectMake(12, (s.height - art) / 2, art, art);
+    const CGFloat tx = art + 26, tw = MAX(0, s.width - tx - 16);
+    _title.frame = CGRectMake(tx, s.height / 2 - 22, tw, 22);
+    _detail.frame = CGRectMake(tx, s.height / 2 + 2, tw, 16);
+    _rule.frame = CGRectMake(tx, s.height - 14, MAX(0, tw - 4), 2);
+}
+- (void)refreshState { _frameView.image = BGAsset(@"library-row", self.highlighted ? 2 : self.selected ? 1 : 0); }
+- (void)setHighlighted:(BOOL)h { [super setHighlighted:h]; [self refreshState]; }
+- (void)setSelected:(BOOL)s { [super setSelected:s]; [self refreshState]; }
+@end
+
+@interface BGGamesController : UIViewController <UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UIDocumentPickerDelegate, UITextFieldDelegate>
+@end
+@implementation BGGamesController {
+    UICollectionView* _grid; NSArray<NSURL*>* _games; NSArray<NSURL*>* _shown; UILabel* _message; UISegmentedControl* _scale;
+    UITextField* _search; BOOL _pickingUpdate; NSCache<NSString*, NSDictionary*>* _art;
+}
+- (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
 - (void)viewDidLoad {
     [super viewDidLoad];
+    _art = [NSCache new];
     UIImage* grid = BGAsset(@"background", 0);
     self.view.backgroundColor = grid ? [UIColor colorWithPatternImage:grid] : BGColor(@"141B25");
-    UIImageView* mascot = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"fuitlet"]]; BGNearest(mascot);
-    mascot.contentMode = UIViewContentModeScaleAspectFit; [mascot.widthAnchor constraintEqualToConstant:72].active = YES; [mascot.heightAnchor constraintEqualToConstant:72].active = YES;
-    UILabel* title = [UILabel new]; title.text = @"BERGAMOT 3DS"; title.textColor = BGColor(@"DFE8EF");
-    title.font = [UIFont monospacedSystemFontOfSize:24 weight:UIFontWeightBold];
-    UIStackView* head = [[UIStackView alloc] initWithArrangedSubviews:@[mascot, title]]; head.spacing = 12; head.alignment = UIStackViewAlignmentCenter;
+    UIImageView* bergie = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"fuitlet"]]; BGNearest(bergie);
+    bergie.contentMode = UIViewContentModeScaleAspectFit; bergie.accessibilityLabel = @"Bergie";
+    [bergie.widthAnchor constraintEqualToConstant:64].active = YES; [bergie.heightAnchor constraintEqualToConstant:64].active = YES;
+    BGPixelLabel* title = [BGPixelLabel new]; title.text = @"BERGAMOT 3DS"; title.font = [UIFont systemFontOfSize:24]; title.textColor = BGInk();
+    [title.heightAnchor constraintEqualToConstant:28].active = YES; title.accessibilityLabel = @"Bergamot 3DS";
+    UIStackView* head = [[UIStackView alloc] initWithArrangedSubviews:@[bergie, title]]; head.spacing = 10; head.alignment = UIStackViewAlignmentCenter;
+    UIView* rule = [UIView new]; rule.backgroundColor = BGAccent(); [rule.heightAnchor constraintEqualToConstant:2].active = YES;
+    UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[BGPanelButton(@"IMPORT", self, @selector(importGame)), BGPanelButton(@"UPDATE", self, @selector(importUpdate))]];
+    buttons.spacing = 10; buttons.distribution = UIStackViewDistributionFillEqually;
     _scale = [[UISegmentedControl alloc] initWithItems:@[@"1×", @"2×", @"3×", @"4×"]];
-    _scale.selectedSegmentIndex = BGPlayerScale() - 1; _scale.selectedSegmentTintColor = BGColor(@"5EE6E6");
-    [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGColor(@"DFE8EF")} forState:UIControlStateNormal];
+    _scale.selectedSegmentIndex = BGPlayerScale() - 1; _scale.selectedSegmentTintColor = BGAccent();
+    [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGInk()} forState:UIControlStateNormal];
     [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGColor(@"141B25")} forState:UIControlStateSelected];
     [_scale addTarget:self action:@selector(scaleChanged) forControlEvents:UIControlEventValueChanged];
-    UILabel* scaleLabel = [UILabel new]; scaleLabel.text = @"Resolution"; scaleLabel.textColor = BGColor(@"93A4B5"); scaleLabel.font = [UIFont systemFontOfSize:14];
-    UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale]]; scaleRow.spacing = 12;
-    UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[[self button:@"Import Game" action:@selector(importGame)], [self button:@"Install Update" action:@selector(importUpdate)]]];
-    buttons.spacing = 10; buttons.distribution = UIStackViewDistributionFillEqually;
-    _message = [UILabel new]; _message.numberOfLines = 0; _message.textColor = BGColor(@"93A4B5"); _message.font = [UIFont systemFontOfSize:13];
-    _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-    _table.backgroundColor = UIColor.clearColor; _table.dataSource = self; _table.delegate = self; _table.separatorColor = BGColor(@"2B3A4C");
-    UIStackView* stack = [[UIStackView alloc] initWithArrangedSubviews:@[head, buttons, scaleRow, _message, _table]];
-    stack.axis = UILayoutConstraintAxisVertical; stack.spacing = 14; stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [stack setCustomSpacing:6 afterView:scaleRow];
+    BGPixelLabel* scaleLabel = [BGPixelLabel new]; scaleLabel.text = @"RESOLUTION"; scaleLabel.font = [UIFont systemFontOfSize:12]; scaleLabel.textColor = BGInk();
+    [scaleLabel.widthAnchor constraintEqualToConstant:124].active = YES;
+    UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale]]; scaleRow.spacing = 12; scaleRow.alignment = UIStackViewAlignmentCenter;
+    UIImageView* searchFrame = [[UIImageView alloc] initWithImage:BGSurface(@"field", 0)]; BGNearest(searchFrame); searchFrame.userInteractionEnabled = YES;
+    [searchFrame.heightAnchor constraintEqualToConstant:44].active = YES;
+    _search = [UITextField new]; _search.font = [UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightRegular]; _search.textColor = BGInk();
+    _search.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"SEARCH YOUR GAMES..." attributes:@{NSForegroundColorAttributeName: [BGInk() colorWithAlphaComponent:.6]}];
+    _search.autocorrectionType = UITextAutocorrectionTypeNo; _search.clearButtonMode = UITextFieldViewModeWhileEditing; _search.returnKeyType = UIReturnKeyDone;
+    _search.delegate = self; _search.accessibilityLabel = @"Search games";
+    [_search addTarget:self action:@selector(filter) forControlEvents:UIControlEventEditingChanged];
+    _search.translatesAutoresizingMaskIntoConstraints = NO; [searchFrame addSubview:_search];
+    [NSLayoutConstraint activateConstraints:@[[_search.leadingAnchor constraintEqualToAnchor:searchFrame.leadingAnchor constant:14],
+        [_search.trailingAnchor constraintEqualToAnchor:searchFrame.trailingAnchor constant:-14], [_search.topAnchor constraintEqualToAnchor:searchFrame.topAnchor],
+        [_search.bottomAnchor constraintEqualToAnchor:searchFrame.bottomAnchor]]];
+    _message = [UILabel new]; _message.numberOfLines = 0; _message.textColor = [BGInk() colorWithAlphaComponent:.75]; _message.font = [UIFont systemFontOfSize:13];
+    UICollectionViewFlowLayout* layout = [UICollectionViewFlowLayout new]; layout.minimumLineSpacing = 12; layout.minimumInteritemSpacing = 10;
+    _grid = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
+    _grid.backgroundColor = UIColor.clearColor; _grid.dataSource = self; _grid.delegate = self; _grid.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
+    [_grid registerClass:BGGameTile.class forCellWithReuseIdentifier:@"game"];
+    UIStackView* stack = [[UIStackView alloc] initWithArrangedSubviews:@[head, rule, buttons, scaleRow, searchFrame, _message, _grid]];
+    stack.axis = UILayoutConstraintAxisVertical; stack.spacing = 12; stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [stack setCustomSpacing:4 afterView:head];
     [self.view addSubview:stack];
     UILayoutGuide* g = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:g.topAnchor constant:16], [stack.bottomAnchor constraintEqualToAnchor:g.bottomAnchor],
+        [stack.topAnchor constraintEqualToAnchor:g.topAnchor constant:12], [stack.bottomAnchor constraintEqualToAnchor:g.bottomAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:g.leadingAnchor constant:16], [stack.trailingAnchor constraintEqualToAnchor:g.trailingAnchor constant:-16]]];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(reload) name:UIApplicationDidBecomeActiveNotification object:nil];
     [self reload];
+}
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)c {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:c]; [_grid.collectionViewLayout invalidateLayout];
 }
 - (void)reload {
     NSArray* files = [NSFileManager.defaultManager contentsOfDirectoryAtURL:BGGamesFolder() includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
     NSMutableArray* games = [NSMutableArray new];
     for (NSURL* u in files) if ([BGGameExtensions() containsObject:u.pathExtension.lowercaseString]) [games addObject:u];
-    [games sortUsingComparator:^NSComparisonResult(NSURL* a, NSURL* b) { return [a.lastPathComponent localizedCaseInsensitiveCompare:b.lastPathComponent]; }];
-    _games = games; [_table reloadData];
-    if (!_message.text.length || [_message.text hasPrefix:@"Tap Import"] || [_message.text hasPrefix:@"Tap a game"])
-        _message.text = games.count ? @"Tap a game to play. Your saves are kept automatically."
-                                    : @"Tap Import Game, or copy games into Files › On My iPhone › Bergamot 3DS › Games.";
+    [games sortUsingComparator:^NSComparisonResult(NSURL* a, NSURL* b) { return [[self titleFor:a] localizedCaseInsensitiveCompare:[self titleFor:b]]; }];
+    _games = games; [self filter];
+    if (!_message.text.length || [_message.text hasPrefix:@"Import a game"] || [_message.text hasPrefix:@"Tap a game"])
+        _message.text = games.count ? @"Tap a game to play. Saves are kept automatically."
+                                    : @"Import a game, or copy games into Files › On My iPhone › Bergamot 3DS › Games.";
 }
+- (void)filter {
+    NSString* q = _search.text;
+    if (!q.length) { _shown = _games; } else {
+        NSMutableArray* m = [NSMutableArray new];
+        for (NSURL* u in _games) if ([[self titleFor:u] localizedCaseInsensitiveContainsString:q] || [u.lastPathComponent localizedCaseInsensitiveContainsString:q]) [m addObject:u];
+        _shown = m;
+    }
+    [_grid reloadData];
+}
+- (BOOL)textFieldShouldReturn:(UITextField*)t { [t resignFirstResponder]; return YES; }
+// Icon and title from the game's own SMDH (or a .smdh sidecar); read once, off the main thread.
+- (NSString*)titleFor:(NSURL*)u { NSString* t = [_art objectForKey:u.path][@"title"]; return t.length ? t : u.URLByDeletingPathExtension.lastPathComponent; }
+- (void)loadArt:(NSURL*)u forIndex:(NSIndexPath*)ip {
+    if ([_art objectForKey:u.path]) return;
+    [_art setObject:@{} forKey:u.path];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        auto art = bergamont::read_game_art(u.fileSystemRepresentation);
+        if (!art) art = bergamont::read_game_art([[u URLByDeletingPathExtension] URLByAppendingPathExtension:@"smdh"].fileSystemRepresentation);
+        NSMutableDictionary* d = [NSMutableDictionary new];
+        if (art) {
+            NSString* full = [[NSString alloc] initWithCharacters:(const unichar*)art->title.data() length:art->title.size()];
+            d[@"title"] = [[full componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet].firstObject stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] ?: @"";
+            CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+            CGContextRef ctx = CGBitmapContextCreate((void*)art->rgba.data(), 48, 48, 8, 48 * 4, cs, kCGImageAlphaPremultipliedLast);
+            CGImageRef img = ctx ? CGBitmapContextCreateImage(ctx) : nullptr;
+            if (img) { d[@"icon"] = [UIImage imageWithCGImage:img]; CGImageRelease(img); }
+            if (ctx) CGContextRelease(ctx); CGColorSpaceRelease(cs);
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self->_art setObject:d forKey:u.path];
+            if ([self->_shown containsObject:u] && ip.item < (NSInteger)self->_shown.count && [self->_shown[ip.item] isEqual:u]) [self->_grid reloadItemsAtIndexPaths:@[ip]];
+        });
+    });
+}
+- (NSInteger)collectionView:(UICollectionView*)c numberOfItemsInSection:(NSInteger)s { (void)c; (void)s; return (NSInteger)_shown.count; }
+- (CGSize)collectionView:(UICollectionView*)c layout:(UICollectionViewLayout*)l sizeForItemAtIndexPath:(NSIndexPath*)ip {
+    (void)l; (void)ip; const CGFloat w = c.bounds.size.width; const NSInteger cols = w >= 680 ? 2 : 1;
+    return CGSizeMake(floor((w - 10 * (cols - 1)) / cols), 88);
+}
+- (UICollectionViewCell*)collectionView:(UICollectionView*)c cellForItemAtIndexPath:(NSIndexPath*)ip {
+    BGGameTile* tile = [c dequeueReusableCellWithReuseIdentifier:@"game" forIndexPath:ip];
+    NSURL* u = _shown[(NSUInteger)ip.item]; NSDictionary* art = [_art objectForKey:u.path];
+    tile.title.text = [self titleFor:u];
+    tile.detail.text = [NSString stringWithFormat:@"3DS · %@", u.pathExtension.uppercaseString];
+    tile.icon.image = art[@"icon"] ?: BGAsset(@"icon-3ds", 0);
+    tile.accessibilityLabel = tile.title.text; tile.isAccessibilityElement = YES; tile.accessibilityTraits = UIAccessibilityTraitButton;
+    if (!art) [self loadArt:u forIndex:ip];
+    return tile;
+}
+- (void)collectionView:(UICollectionView*)c didSelectItemAtIndexPath:(NSIndexPath*)ip { [c deselectItemAtIndexPath:ip animated:YES]; [self play:_shown[(NSUInteger)ip.item]]; }
 - (void)scaleChanged { [NSUserDefaults.standardUserDefaults setInteger:_scale.selectedSegmentIndex + 1 forKey:@"BGPlayerScale"]; }
-- (NSInteger)tableView:(UITableView*)t numberOfRowsInSection:(NSInteger)s { (void)t; (void)s; return (NSInteger)_games.count; }
-- (UITableViewCell*)tableView:(UITableView*)t cellForRowAtIndexPath:(NSIndexPath*)p {
-    UITableViewCell* c = [t dequeueReusableCellWithIdentifier:@"g"] ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"g"];
-    NSURL* u = _games[(NSUInteger)p.row];
-    c.backgroundColor = UIColor.clearColor; c.textLabel.textColor = BGColor(@"DFE8EF"); c.detailTextLabel.textColor = BGColor(@"93A4B5");
-    c.textLabel.text = u.URLByDeletingPathExtension.lastPathComponent; c.detailTextLabel.text = u.pathExtension.uppercaseString;
-    UIView* sel = [UIView new]; sel.backgroundColor = BGColor(@"1F2C3A"); c.selectedBackgroundView = sel;
-    return c;
-}
 // Scripted testing: launch with --bg-play "<file name in Games>" to open it directly.
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
@@ -210,11 +334,8 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
     NSArray* args = NSProcessInfo.processInfo.arguments; NSUInteger i = [args indexOfObject:@"--bg-play"];
     if (i != NSNotFound && i + 1 < args.count) [self play:[BGGamesFolder() URLByAppendingPathComponent:args[i + 1]]];
 }
-- (void)tableView:(UITableView*)t didSelectRowAtIndexPath:(NSIndexPath*)p {
-    [t deselectRowAtIndexPath:p animated:YES];
-    [self play:_games[(NSUInteger)p.row]];
-}
 - (void)play:(NSURL*)game {
+    [_search resignFirstResponder];
     BGPlayController* play = [[BGPlayController alloc] initWithGame:game];
     __weak BGGamesController* weakSelf = self;
     play.finished = ^(NSString* message, BOOL failed) {
@@ -250,6 +371,7 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
     _message.text = added ? [NSString stringWithFormat:@"Imported %lu game%@.", (unsigned long)added, added == 1 ? @"" : @"s"] : @"That file isn't a 3DS game this app can open.";
     [self reload];
 }
+- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
 @end
 
 @interface BGSceneDelegate : UIResponder <UIWindowSceneDelegate>

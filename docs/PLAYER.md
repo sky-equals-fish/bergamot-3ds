@@ -10,8 +10,11 @@ and play; saves are kept automatically.
 pick it from **Open Recent**. Esc pauses, ⌘. stops, and the mouse acts as the
 touch screen.
 
-**iPhone and iPad:** tap **Import Game**, or copy games into **Files › On My
-iPhone › Bergamot 3DS › Games**. Tap a game to play. HOME opens the pause menu.
+**iPhone and iPad:** install from the Xcode project in Releases (open it, pick
+your team under Signing & Capabilities, press Run), or sideload the unsigned
+`.ipa`. In the app, tap **Import** or copy games into **Files › On My iPhone ›
+Bergamot 3DS › Games**. The library shows each game's own icon and title, with
+search. Tap a game to play; HOME opens the pause menu.
 
 Supported files are `.3ds`, `.cci`, `.cxi`, `.3dsx` and decrypted `.cia`.
 Updates and DLC go through **File › Install Update or DLC** on Mac, or
@@ -40,7 +43,7 @@ button pauses.
 | GPU handoff | Standard, queue-ordered (experimental) | Standard |
 
 On Mac, everything is in **Settings** (⌘,), and resolution and layout are also
-in the **Emulation** menu. On iPhone, resolution is on the game list. Resolution,
+in the **Emulation** menu. On iPhone, resolution is on the library screen. Resolution,
 shaders and GPU handoff take effect the next time a game starts.
 
 **About shaders:** when a game starts, the app builds every shader that game has
@@ -80,8 +83,9 @@ cmake -S player -B build/player-ios -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/player-ios
 ```
 
-To make release files, run `python tools/package_player.py --mac --ios --source`.
-It writes a Mac zip, an unsigned `.ipa`, the matching source archive and
-`SHA256SUMS` to `artifacts/player-release/`. The Mac app is ad-hoc signed unless
+To make release files, run `python tools/package_player.py --mac --ios --xcode --source`.
+It writes a Mac zip, an unsigned `.ipa`, the iPhone Xcode project (prebuilt core
+and libraries, built by `tools/make_xcode_kit.py`), the matching source archive
+and `SHA256SUMS` to `artifacts/player-release/`. The Mac app is ad-hoc signed unless
 you pass `--identity "Developer ID Application: …"`, and it should be notarized
 before you share it.

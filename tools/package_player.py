@@ -11,6 +11,7 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
 
@@ -72,8 +73,9 @@ def package_source(version, out):
     prefix = f"bergamot-3ds-{version}-source"
     names = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "--cached", "--others", "--exclude-standard", "-z", "."]).split(b"\0")
     keep_top = {"CMakeLists.txt", "LICENSE", "NOTICE.txt", "THIRD_PARTY_NOTICES.txt", "dependencies.json", "requirements-build.txt"}
-    tools = {"bootstrap.py", "build_core.py", "make_probe.py", "package_player.py"}
-    art = ("default-control-", "default-dpad-", "default-circle-", "default-cstick-", "default-skin-bezel-", "default-skin-phone-details-", "default-background-")
+    tools = {"bootstrap.py", "build_core.py", "make_probe.py", "package_player.py", "make_xcode_kit.py"}
+    art = ("default-control-", "default-dpad-", "default-circle-", "default-cstick-", "default-skin-bezel-", "default-skin-phone-details-", "default-background-",
+           "default-library-row-", "default-field-", "default-panel-", "default-font-", "default-icon-3ds-")
     def wanted(rel):
         p = rel.parts
         if len(p) == 1: return rel.name in keep_top
@@ -82,7 +84,7 @@ def package_source(version, out):
         if p[0] == "patches": return rel.name in PATCHES
         if p[0] == "tools": return rel.name in tools
         if p[0] == "tests": return len(p) == 2
-        if p[0] == "ios": return rel.name == "pixel_controls.h" or (len(p) == 4 and p[2] == "exports" and rel.name.startswith(art))
+        if p[0] == "ios": return rel.name in ("pixel_controls.h", "game_art.hpp") or (len(p) == 4 and p[2] == "exports" and rel.name.startswith(art))
         return False
     with tarfile.open(target, "w:gz") as tar:
         for raw in names:
@@ -109,6 +111,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/player-release")
     parser.add_argument("--mac", action="store_true"); parser.add_argument("--ios", action="store_true")
     parser.add_argument("--source", action="store_true")
+    parser.add_argument("--xcode", action="store_true", help="iPhone Xcode project with the prebuilt core")
     parser.add_argument("--identity", default="-", help="codesign identity for the Mac app; '-' is ad hoc")
     args = parser.parse_args()
     version = plistlib.loads((ROOT / "player/MacInfo.plist").read_bytes())["CFBundleShortVersionString"]
@@ -116,6 +119,12 @@ def main():
     made = []
     if args.mac: made.append(package_mac(version, args.output, args.identity))
     if args.ios: made.append(package_ios(version, args.output))
+    if args.xcode:
+        stage = args.output / "xcode-stage"
+        run(sys.executable, ROOT / "tools/make_xcode_kit.py", "--output", stage, "--version", version)
+        target = args.output / f"Bergamot-3DS-{version}-ios-xcode.zip"
+        shutil.move(stage / target.name, target); shutil.rmtree(stage)
+        made.append(target)
     if args.source: made.append(package_source(version, args.output))
     sums = args.output / "SHA256SUMS"
     lines = {l.split("  ", 1)[1]: l for l in sums.read_text().splitlines()} if sums.exists() else {}

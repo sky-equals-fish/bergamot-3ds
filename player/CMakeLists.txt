@@ -17,7 +17,7 @@ if(CTR_PLATFORM MATCHES "^ios")
         "-framework UIKit" "-framework GameController" "-framework AVFoundation" "-framework UniformTypeIdentifiers")
     # The Bergamot app's 3DS control art, default palette only.
     file(GLOB BG_ART "${BG_ROOT}/ios/PixelArt/exports/default-*.png")
-    list(FILTER BG_ART INCLUDE REGEX "default-(control-(a|b|x|y|l|r|zl|zr|home|select|start)|dpad|circle|cstick|skin-bezel|skin-phone-details|background)-[0-9]+\\.png$")
+    list(FILTER BG_ART INCLUDE REGEX "default-(control-(a|b|x|y|l|r|zl|zr|home|select|start)|dpad|circle|cstick|skin-bezel|skin-phone-details|background|library-row|field|panel|font|icon-3ds)-[0-9]+\\.png$")
     file(GLOB BG_ICONS "${CMAKE_CURRENT_LIST_DIR}/Icons/AppIcon*.png")
     target_sources(Bergamot3DS PRIVATE ${BG_ART} ${BG_ICONS} "${CMAKE_CURRENT_LIST_DIR}/Icons/fuitlet.png" ${BG_LICENSES})
     set_source_files_properties(${BG_ART} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/PixelArt")

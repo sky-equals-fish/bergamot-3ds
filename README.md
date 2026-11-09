@@ -24,9 +24,6 @@ Bergamot 3DS is part of [Project Bergamot](#about-project-bergamot) by Sky=Fish.
 It's a small app you can download and play with, and the same emulator core
 packaged so other apps can use it.
 
-This repo covers the 3DS only. DS and GBA run on separate cores and will get
-their own repos.
-
 It runs entirely without JIT, on iPhone and on Mac. No special entitlements, no
 debugger tricks, no AltServer step, and nothing a normal app isn't allowed to do.
 
@@ -41,8 +38,14 @@ Grab the latest build from [Releases](https://github.com/sky-equals-fish/bergamo
 3. Open a game with **File › Open Game** or drag it onto the window.
 
 **iPhone and iPad** (iOS 18 or later)
-The `.ipa` is unsigned. Install it with your sideloading tool of choice, such as
-AltStore or SideStore. Then import games from the app, or drop them into
+1. Download the Xcode project zip and open `Bergamot3DS.xcodeproj` in Xcode.
+2. Under **Signing & Capabilities**, pick your team. A free Apple ID works, but
+   those installs expire after 7 days.
+3. Plug in your device and press **Run**. The emulator core is prebuilt, so
+   there's nothing else to compile.
+
+If you'd rather sideload, the unsigned `.ipa` works with AltStore or SideStore.
+Import games from the app's library, or drop them into
 **Files › On My iPhone › Bergamot 3DS › Games**.
 
 Supported files: `.3ds`, `.cci`, `.cxi`, `.3dsx`, and decrypted `.cia`. Saves
@@ -57,7 +60,7 @@ are kept automatically.
 | Shaders | Prepare cached shaders (default), or also compile new ones in the background |
 | GPU handoff | Standard (default) or queue-ordered (experimental) |
 
-On Mac, open **Settings** with ⌘,. On iPhone, resolution is on the game list.
+On Mac, open **Settings** with ⌘,. On iPhone, resolution is on the library screen.
 Native resolution runs best on most devices.
 
 Keyboard, game controllers, and the mouse (as the touch screen) all work. The
@@ -146,9 +149,9 @@ What's been tested so far is in [docs/STATUS.md](docs/STATUS.md).
 Project Bergamot is Sky=Fish's work on emulation for Apple devices without JIT.
 It includes:
 
-- **Bergamot**, a pixel-art emulator front end for iPhone and Mac. It plays 3DS,
-  DS and GBA today. GameCube, Wii, Wii U, Switch, PS1, PS2, PSP and more are in
-  development.
+- **Bergamot**, a pixel-art emulator front end for iPhone and Mac. It hasn't been
+  released yet. It supports 3DS, DS and GBA, with GameCube, Wii, Wii U, Switch,
+  PS1, PS2, PSP and more in development.
 - **Bergamot 3DS**, this repo: the 3DS core and a standalone app.
 
 Bergie, the sprout at the top of this page, is the project's mascot.
