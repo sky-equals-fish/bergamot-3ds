@@ -6,6 +6,9 @@
 @property(nonatomic,copy) void (^menuPressed)(void);
 @property(nonatomic) BOOL previewMode;
 @property(nonatomic) NSInteger gameSystem; // 1=3DS (default), 2=DS, 3=GBA
+// Opt-in (Bergamot 3DS app): in the tall portrait 3DS layout the top screen spans the full width
+// at its native 5:3 aspect, with no bezel and no decorative art drawn over it. Default NO.
+@property(nonatomic) BOOL fullWidthTop;
 - (ctr::DualScreenLayout)fittedScreens;
 @property(nonatomic,readonly) ctr::DualScreenLayout screenSlots;
 - (void)releaseTouches;
@@ -91,6 +94,11 @@
  if(compact&&!wide){
   CGSize canvas=CGSizeMake(375,812);
   _slots={{8./375,45./812,359./375,215./812},{44./375,278./812,287./375,215./812}};
+  if(self.fullWidthTop){
+   // Edge to edge at 5:3, sitting a 10 pt gap above the touch screen; shrinks only if it cannot fit.
+   const CGFloat gap=10./h, room=_slots.bottom.y-gap, height=MIN(w*240./400./h,room);
+   _slots.top={0,MAX(0.,room-height),1,height};
+  }
 
   [self place:@"circle" kind:@"circle" button:0 rect:CGRectMake(32,520,104,104) canvas:canvas];
   [self place:@"dpad" kind:@"dpad" button:0 rect:CGRectMake(19,638,130,130) canvas:canvas];
@@ -135,11 +143,13 @@
   // The shell must never cover the live lower touchscreen.
   CGContextClearRect(c,screen);
   if(self.previewMode){[BGColor(@"080C12") setFill];CGContextFillRect(c,screen);NSString* text=self.gameSystem==3?@"GAME SCREEN":((r.x==fit.top.x&&r.y==fit.top.y)?@"TOP SCREEN":@"TOUCH SCREEN");[text drawAtPoint:CGPointMake(r.x+12,r.y+12) withAttributes:@{NSFontAttributeName:[UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightMedium],NSForegroundColorAttributeName:BGColor(@"9FAFB9")}];}
-  [bezel drawInRect:CGRectInset(screen,-6,-6)];
+  if(!(self.fullWidthTop&&r.x==fit.top.x&&r.y==fit.top.y))[bezel drawInRect:CGRectInset(screen,-6,-6)];
  }
  if(self.gameSystem<2 && self.bounds.size.height/self.bounds.size.width>1.6 && ![NSUserDefaults.standardUserDefaults boolForKey:@"BGWide"]){
   [BGAsset(@"skin-phone-details",0) drawInRect:self.bounds];
  }
+ // Full-width top screen: decorative speaker grilles and the like must never cover the picture.
+ if(self.fullWidthTop&&!self.previewMode&&fit.top.width>0)CGContextClearRect(c,CGRectMake(fit.top.x,fit.top.y,fit.top.width,fit.top.height));
 }
 // Keep artwork geometry separate from forgiving shoulder touch targets.
 - (CGRect)touchFrameForItem:(NSDictionary*)item {

@@ -84,7 +84,7 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
     self.view.backgroundColor = grid ? [UIColor colorWithPatternImage:grid] : BGColor(@"141B25");
     _canvas = [UIView new]; [self.view addSubview:_canvas];
     _screen = [BGMetalView new]; [_canvas addSubview:_screen];
-    _controls = [BGPixelControls new]; _controls.gameSystem = 1; [_canvas addSubview:_controls];
+    _controls = [BGPixelControls new]; _controls.gameSystem = 1; _controls.fullWidthTop = YES; [_canvas addSubview:_controls];
     _status = [UILabel new]; _status.font = [UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightMedium];
     _status.textColor = [BGColor(@"93A4B5") colorWithAlphaComponent:.8]; _status.hidden = ![NSUserDefaults.standardUserDefaults boolForKey:@"BGShowStats"];
     [self.view addSubview:_status];
@@ -117,6 +117,7 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
 }
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    if (!_game) { _controls.previewMode = YES; _loading.hidden = YES; [_controls setNeedsDisplay]; return; }   // layout preview (test hook)
     if (!_session.running) { UIApplication.sharedApplication.idleTimerDisabled = YES; [_session run:_game]; }
 }
 - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear:animated]; UIApplication.sharedApplication.idleTimerDisabled = NO; }
@@ -268,7 +269,7 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
 @end
 @implementation BGGamesController {
     UICollectionView* _grid; NSArray<NSURL*>* _games; NSArray<NSURL*>* _shown; UILabel* _message; BGSegmentControl* _scale;
-    UITextField* _search; BOOL _pickingUpdate; NSCache<NSString*, NSDictionary*>* _art;
+    UITextField* _search; UILabel* _scaleNote; BOOL _pickingUpdate; NSCache<NSString*, NSDictionary*>* _art;
 }
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
 - (void)viewDidLoad {
@@ -285,13 +286,16 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     UIView* rule = [UIView new]; rule.backgroundColor = BGAccent(); [rule.heightAnchor constraintEqualToConstant:2].active = YES;
     UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[BGPanelButton(@"IMPORT", self, @selector(importGame)), BGPanelButton(@"UPDATE", self, @selector(importUpdate))]];
     buttons.spacing = 10; buttons.distribution = UIStackViewDistributionFillEqually;
-    _scale = [[BGSegmentControl alloc] initWithTitles:@[@"1X", @"2X", @"3X", @"4X"]
-                                    accessibilityNames:@[@"Native upscaling", @"2× upscaling", @"3× upscaling", @"4× upscaling"]];
-    _scale.selectedIndex = BGPlayerScale() - 1;
+    _scale = [[BGSegmentControl alloc] initWithTitles:@[@"AUTO", @"1X", @"2X", @"3X", @"4X"]
+                                    accessibilityNames:@[@"Automatic upscaling", @"Native upscaling", @"2× upscaling", @"3× upscaling", @"4× upscaling"]];
+    const NSInteger stored = [NSUserDefaults.standardUserDefaults integerForKey:@"BGPlayerScale"];
+    _scale.selectedIndex = stored >= 1 && stored <= 4 ? stored : 0;
+    _scaleNote = [UILabel new]; _scaleNote.font = [UIFont systemFontOfSize:12]; _scaleNote.textColor = [BGInk() colorWithAlphaComponent:.6];
     [_scale addTarget:self action:@selector(scaleChanged) forControlEvents:UIControlEventValueChanged];
     BGPixelLabel* scaleLabel = [BGPixelLabel new]; scaleLabel.text = @"UPSCALING"; scaleLabel.font = [UIFont systemFontOfSize:12]; scaleLabel.textColor = BGInk();
-    [scaleLabel.widthAnchor constraintEqualToConstant:112].active = YES;
-    UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale]]; scaleRow.spacing = 12; scaleRow.alignment = UIStackViewAlignmentCenter;
+    [scaleLabel.heightAnchor constraintEqualToConstant:14].active = YES;
+    UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale, _scaleNote]];
+    scaleRow.axis = UILayoutConstraintAxisVertical; scaleRow.spacing = 6;
     [_scale.heightAnchor constraintEqualToConstant:40].active = YES;
     UIImageView* searchFrame = [[UIImageView alloc] initWithImage:BGSurface(@"field", 0)]; BGNearest(searchFrame); searchFrame.userInteractionEnabled = YES;
     [searchFrame.heightAnchor constraintEqualToConstant:44].active = YES;
@@ -318,6 +322,7 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
         [stack.topAnchor constraintEqualToAnchor:g.topAnchor constant:12], [stack.bottomAnchor constraintEqualToAnchor:g.bottomAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:g.leadingAnchor constant:16], [stack.trailingAnchor constraintEqualToAnchor:g.trailingAnchor constant:-16]]];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(reload) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [self describeScale];
     [self reload];
 }
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)c {
@@ -383,13 +388,22 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     return tile;
 }
 - (void)collectionView:(UICollectionView*)c didSelectItemAtIndexPath:(NSIndexPath*)ip { [c deselectItemAtIndexPath:ip animated:YES]; [self play:_shown[(NSUInteger)ip.item]]; }
-- (void)scaleChanged { [NSUserDefaults.standardUserDefaults setInteger:_scale.selectedIndex + 1 forKey:@"BGPlayerScale"]; }
+- (void)scaleChanged { [NSUserDefaults.standardUserDefaults setInteger:_scale.selectedIndex forKey:@"BGPlayerScale"]; [self describeScale]; }
+- (void)describeScale {
+    NSInteger px = 0; const NSInteger pick = BGAutoScale(&px);
+    _scaleNote.text = _scale.selectedIndex == 0
+        ? [NSString stringWithFormat:@"Auto renders at %ld× for this %@'s %ld-pixel-wide screen.", (long)pick,
+              UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? @"iPad" : @"iPhone", (long)px]
+        : (_scale.selectedIndex == 1 ? @"Native 3DS resolution, 400×240." : @"Higher upscaling looks sharper and uses more GPU.");
+}
 // Scripted testing: launch with --bg-play "<file name in Games>" to open it directly.
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     static BOOL done = NO; if (done) return; done = YES;
     NSArray* args = NSProcessInfo.processInfo.arguments; NSUInteger i = [args indexOfObject:@"--bg-play"];
     if (i != NSNotFound && i + 1 < args.count) [self play:[BGGamesFolder() URLByAppendingPathComponent:args[i + 1]]];
+    // --bg-preview-layout shows the play screen's layout without starting the emulator (Simulator checks).
+    if ([args containsObject:@"--bg-preview-layout"]) [self presentViewController:[[BGPlayController alloc] initWithGame:nil] animated:NO completion:nil];
 }
 - (void)play:(NSURL*)game {
     [_search resignFirstResponder];

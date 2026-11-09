@@ -37,7 +37,7 @@ button pauses.
 
 | Setting | Options | Default |
 | --- | --- | --- |
-| Upscaling | 1× native (400×240), 2×, 3×, 4× (1600×960) | 1× |
+| Upscaling | Auto, 1× native (400×240), 2×, 3×, 4× (1600×960) | Auto on iPhone, 1× on Mac |
 | Screen layout | Stacked, side by side | Stacked |
 | Shaders | Prepare cached shaders, or also compile new ones in the background | Prepare only |
 | GPU handoff | Standard, queue-ordered (experimental) | Standard |
@@ -45,6 +45,12 @@ button pauses.
 On Mac, everything is in **Settings** (⌘,), and upscaling and layout are also
 in the **Emulation** menu. On iPhone, upscaling is on the library screen. Upscaling,
 shaders and GPU handoff take effect the next time a game starts.
+
+**About Auto:** the game renders at the whole-number scale closest to the top
+screen's physical pixel width (400 px per 1×), then is filtered to fit. It is capped
+by chip: 3× on A17 Pro and newer, 2× on A15/A16, 1× on older devices. Only the
+iPhone 15 Pro has been measured; the other caps are estimates. In portrait the top
+screen spans the full width of the phone at its native 5:3 shape.
 
 **About shaders:** when a game starts, the app builds every shader that game has
 used before ("Preparing shaders"), so effects you've already seen never pause the

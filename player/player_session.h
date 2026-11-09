@@ -6,6 +6,10 @@
 #import <QuartzCore/CAMetalLayer.h>
 #import <AVFoundation/AVFoundation.h>
 #import <GameController/GameController.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+#endif
+#include <sys/sysctl.h>
 #include "runtime.hpp"
 #include "metal_presenter.h"
 #include "display_layout.hpp"
@@ -51,8 +55,39 @@ static NSURL* BGPlayerDataRoot() {
     [NSFileManager.defaultManager createDirectoryAtURL:u withIntermediateDirectories:YES attributes:nil error:nil];
     return u;
 }
-// Internal resolution: 1 is the 3DS's native 400x240 (default); 2-4 are opt-in upscales.
-static NSInteger BGPlayerScale() { NSInteger s = [NSUserDefaults.standardUserDefaults integerForKey:@"BGPlayerScale"]; return s >= 1 && s <= 4 ? s : 1; }
+// Device identifier such as "iPhone16,1"; the Simulator reports the model it simulates.
+static NSString* BGDeviceModel() {
+    if (NSString* sim = NSProcessInfo.processInfo.environment[@"SIMULATOR_MODEL_IDENTIFIER"]) return sim;
+    char machine[64] = {}; size_t size = sizeof(machine);
+    return sysctlbyname("hw.machine", machine, &size, nullptr, 0) == 0 ? [NSString stringWithUTF8String:machine] : @"";
+}
+// Highest upscale this chip is expected to sustain: A17 Pro and newer 3x, A15/A16 2x, older 1x.
+// Only the iPhone 15 Pro (iPhone16,1) has been measured; the other tiers are conservative estimates.
+static NSInteger BGDeviceScaleCap(NSString* model) {
+    NSScanner* scan = [NSScanner scannerWithString:model]; NSString* family = nil; NSInteger major = 0;
+    [scan scanCharactersFromSet:NSCharacterSet.letterCharacterSet intoString:&family]; [scan scanInteger:&major];
+    if ([family isEqualToString:@"iPhone"]) return major >= 16 ? 3 : major >= 14 ? 2 : 1;   // iPhone16,x = A17 Pro / iPhone 15 Pro
+    if ([family isEqualToString:@"iPad"]) return major >= 13 ? 2 : 1;                       // iPad13,x+ = M1 and newer
+    return 1;
+}
+// AUTO upscaling: render at the whole-number scale nearest the top screen's physical pixel width
+// (400 px per 1x), then let the presenter's linear filter fit it. 1179 px (iPhone 15 Pro) -> 3x.
+static NSInteger BGAutoScale(NSInteger* pixels = nullptr) {
+#if TARGET_OS_IOS
+    const CGSize native = UIScreen.mainScreen.nativeBounds.size;
+    const NSInteger px = (NSInteger)MIN(native.width, native.height);
+    if (pixels) *pixels = px;
+    return MAX(1, MIN(BGDeviceScaleCap(BGDeviceModel()), (NSInteger)lround(px / 400.0)));
+#else
+    if (pixels) *pixels = 0;
+    return 1;
+#endif
+}
+// Internal resolution. Stored 1-4 is a fixed choice; 0 or unset means AUTO (native 1x on Mac).
+static NSInteger BGPlayerScale() {
+    const NSInteger s = [NSUserDefaults.standardUserDefaults integerForKey:@"BGPlayerScale"];
+    return s >= 1 && s <= 4 ? s : BGAutoScale();
+}
 
 // Installed base-game CIAs, keyed by source path. An entry is reused only while the source
 // file's size and modification date and the installed content file are all unchanged, so

@@ -55,13 +55,13 @@ are kept automatically.
 
 | Setting | Options |
 | --- | --- |
-| Upscaling | 1× native (default), 2×, 3×, 4× |
+| Upscaling | Auto (default on iPhone), 1× native (default on Mac), 2×, 3×, 4× |
 | Screen layout | Stacked or side by side |
 | Shaders | Prepare cached shaders (default), or also compile new ones in the background |
 | GPU handoff | Standard (default) or queue-ordered (experimental) |
 
 On Mac, open **Settings** with ⌘,. On iPhone, upscaling is on the library screen.
-Native (1×) runs best on most devices.
+On iPhone, Auto picks the upscale from your model and screen: 3× on an iPhone 15 Pro.
 
 Keyboard, game controllers, and the mouse (as the touch screen) all work. The
 full control layout is in the [app guide](docs/PLAYER.md).
