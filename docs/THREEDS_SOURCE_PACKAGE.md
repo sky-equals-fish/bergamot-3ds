@@ -1,7 +1,7 @@
 # Use the Bergamot 3DS core on Mac and iOS
 
 The standalone package exposes Bergamot's Azahar-based 3DS integration without
-its app UI, artwork, library database, DS or GBA cores. It is a **C++20 /
+the Bergamot front end, its artwork or its library database. It is a **C++20 /
 Objective-C++ source SDK**, currently compiler/toolchain-coupled rather than a
 stable C ABI. Swift hosts need their own Objective-C++ bridge.
 
@@ -189,13 +189,13 @@ universal compatibility or sustained smooth 4× performance.
 ## Content and redistribution
 
 Supply your own compatible titles and any required keys, updates or system data.
-See [user files](USER_FILES.md); importing keys is not a promise of encrypted-title
+See [the app guide](PLAYER.md); importing keys is not a promise of encrypted-title
 compatibility. No Nintendo games, keys, firmware, saves or signing files are in
 this source archive.
 
 Read [LICENSE](../LICENSE), [NOTICE.txt](../NOTICE.txt),
 [third-party license texts](../THIRD_PARTY_NOTICES.txt), and
-[release readiness](RELEASE_READINESS.md). The host integration is GPL-3.0-or-later
+[status](STATUS.md). The host integration is GPL-3.0-or-later
 around credited upstream components. A separate archive does not remove those
 obligations. Binary releases need their exact corresponding sources and notices;
 this preview fetches dependencies rather than bundling a complete source offer.

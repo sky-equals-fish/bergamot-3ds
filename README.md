@@ -24,6 +24,9 @@ Bergamot 3DS is part of [Project Bergamot](#about-project-bergamot) by Sky=Fish.
 It's a small app you can download and play with, and the same emulator core
 packaged so other apps can use it.
 
+This repo covers the 3DS only. DS and GBA run on separate cores and will get
+their own repos.
+
 It runs entirely without JIT, on iPhone and on Mac. No special entitlements, no
 debugger tricks, no AltServer step, and nothing a normal app isn't allowed to do.
 
@@ -136,7 +139,7 @@ This is an early preview. On a Mac (M3 Pro), Pokémon Alpha Sapphire runs at
 full speed, with no freezes over 100 ms after startup in our 3-minute test runs.
 An earlier build of the core has run the same game on an iPhone 15 Pro, but
 this app's iPhone build hasn't been tested on a device yet. Compatibility beyond the games we've tried is unknown.
-Measurements and history are in [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md).
+What's been tested so far is in [docs/STATUS.md](docs/STATUS.md).
 
 ## About Project Bergamot
 

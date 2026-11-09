@@ -16,7 +16,8 @@ COMMON_TOOLS = {'bootstrap.py', 'build_core.py', 'make_probe.py', 'prepare_sourc
 APP_TOOLS = {'build_app.py', 'build_device.py', 'build_simulator.py', 'build_handheld_cores.py',
              'make_handheld_probes.py', 'test_handheld_runtimes.py'}
 DOCS = {'RELEASE_READINESS.md', 'USER_FILES.md', 'THREEDS_SOURCE_PACKAGE.md', 'RUNTIME_AUDIT.md', 'PRESENTATION_SYNC_EXPERIMENT.md',
-        'PLAYER.md', 'AZAHAR_PATCHES.md'}
+        'PLAYER.md', 'AZAHAR_PATCHES.md', 'STATUS.md'}
+APP_ONLY_DOCS = {'RELEASE_READINESS.md', 'USER_FILES.md', 'RUNTIME_AUDIT.md'}
 DENIED = {'.pem', '.p12', '.mobileprovision', '.key', '.keys', '.cia', '.3ds', '.3dsx', '.nds',
           '.gba', '.sav', '.srm', '.dylib', '.a', '.ipa', '.bin'}
 AZAHAR_PATCHES = {'0001-libretro-frame-synchronization.patch', '0007-azahar-no-jit-build.patch',
@@ -42,6 +43,7 @@ def selected(relative, component):
             return component == 'app' and relative.name in {'README.md', 'home.png', '3ds-controls.png', 'ds-controls.png', 'gba-controls.png'}
         if len(parts) == 3 and parts[1] == 'art':
             return relative.name == 'fuitlet.png'
+        if component == '3ds' and relative.name in APP_ONLY_DOCS: return False   # Bergamot front end, incl. DS/GBA
         return len(parts) == 2 and relative.name in DOCS
     if parts[0] == 'systems': return parts[1] == '3ds' or (len(parts) > 2 and parts[1:3] == ('examples', 'three-ds'))
     if parts[0] == 'tests': return len(parts) == 2 or (component == 'app' and parts[1] in {'handheld', 'ios'})
@@ -72,6 +74,7 @@ def export(component, output):
         files['README.md'] = (ROOT / 'README.md').read_bytes()
     else:
         files['README.md'] = (ROOT / 'docs/THREEDS_REPO_README.md').read_bytes()
+        files['NOTICE.txt'] = (ROOT / 'docs/THREEDS_NOTICE.txt').read_bytes()   # 3DS-only credits
     revision = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
     manifest = {'component': component, 'format': 'source-only-preview', 'base_revision': revision,
                 'working_tree_snapshot': True, 'binary_release_approved': False,

@@ -9,17 +9,15 @@
     ".gitignore": "bf1eefc306c99e78f205400b015d5c6ff5552040fe6401889123a05084657504",
     "CMakeLists.txt": "6b7a9581c8df988b8f6b0a9938392ba3950536e5104e74ab6dfd3451462fa6dc",
     "LICENSE": "52b66866c785f554207a4685d3d6f5f067938050f61c4cdc0a05b4bf20c6e037",
-    "NOTICE.txt": "660f271bbc87cfc74cea050bbc3298c4511775ef76527f2c59b2511292a577c0",
-    "README.md": "7402001b4cab654c37afb1e3b61602c3577da5181efd8f8f00c4fbeac4db0836",
+    "NOTICE.txt": "c0f877ab41c0471e0697387a54833c9b8c48a23b9b6e750d2911177dbfed768e",
+    "README.md": "523b38dfe74c96065816811bf4eaf3b0cb3b1a30944c9695456af713dc702d0d",
     "THIRD_PARTY_NOTICES.txt": "de9b49a73c89e0e7820fe8352b06d7be8655f29110efe59323e03d64cc7604c9",
     "dependencies.json": "009e900f6fa98a47e43712d6f94582a2b4098573bfe3a4b5432705860d409eab",
     "docs/AZAHAR_PATCHES.md": "b0de02974e05daba59bc9791876a8ec187abdbb7bed7309db1c4842826d89f11",
     "docs/PLAYER.md": "e7b98b3136d6c6ea2bd6560d227d33842129ae2b22b1d882634ff113904c0965",
     "docs/PRESENTATION_SYNC_EXPERIMENT.md": "16082e528a59cbfdb1bf7dec43bd84fa8f5f9c1055cd6f011b94fe6cffd0bb7c",
-    "docs/RELEASE_READINESS.md": "507b56f831536e48b8d81b4b966c957a769d9e19928fcdc242e1d2113d38f55b",
-    "docs/RUNTIME_AUDIT.md": "57359db5ffc6c3144ba07007a48b61bd7a146d3ba82e4be12bf05e8df36e3990",
-    "docs/THREEDS_SOURCE_PACKAGE.md": "c4008ee027dc35bc185de99e18ce384fb5bcabe94c7d3265d46cb41ab8616046",
-    "docs/USER_FILES.md": "948a2e08170d932b573f4a85c949299c6899c4e91c50eb112b9989f607e59236",
+    "docs/STATUS.md": "a6a1ef6f6b50f29ad8ba52651a1bfcb9e5e16c61860ca551502f2af0e637e21d",
+    "docs/THREEDS_SOURCE_PACKAGE.md": "7af4e58e0f80fc67b6b4db127f0681522fd4d929b93d1f72fbba66b85d39aa31",
     "docs/art/fuitlet.png": "bf78db64d1156febbf293f7ddf374ab9cd7544fc9e0454af82a4e5ca368d8ca9",
     "ios/PixelArt/exports/default-background-0.png": "6dfbe76f5d83da33ea8fb87fdb3618cd5465095d5c86e590a6d5af9f6cf8ebc8",
     "ios/PixelArt/exports/default-circle-0.png": "808f4bf31db699c7d86aeca633dbb2b66885fdeb19eb2ff91fe45cc2e82d8612",
@@ -102,6 +100,6 @@
     "tools/build_core.py": "521dc66f2154cff0fd691094bb59af5bf4f4095f89100324eeea0b31e67bd993",
     "tools/make_probe.py": "b4abbf01b203c8c4defcd8a11e84198104119acebb319d11e38aa7203079c3d5",
     "tools/package_player.py": "694c432ecbb4e51cab1092e7f615ae78f2b1d9d3938e22af788a0895c85fdc58",
-    "tools/prepare_source_release.py": "30966b5acff6c2c79b1f7636189af1d258e0efa5a3b4b112abdcd31bc1afe5ec"
+    "tools/prepare_source_release.py": "7482684c842b63385ff05694aab41f5c72bccf5d186ded4922d59e6c5716f5e5"
   }
 }
