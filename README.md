@@ -1,240 +1,158 @@
-<!-- Root README of the standalone bergamot-3ds source repository. Links are
-     relative to that repository's root; tools/prepare_source_release.py copies
-     this file to README.md when exporting the 3ds component. -->
+<!-- Root README of the standalone bergamot-3ds repository. Links are relative to that
+     repository's root; tools/prepare_source_release.py copies this file to README.md
+     when exporting the 3ds component. -->
 <p align="center">
-  <img src="docs/art/fuitlet.png" width="160" alt="Fuitlet, the Bergamot mascot: a round green leaf-sprout character with a white headband">
+  <img src="docs/art/fuitlet.png" width="140" alt="Fuitlet, the Bergamot mascot: a round green sprout with a white headband">
 </p>
 
-<h1 align="center">Bergamot 3DS core</h1>
+<h1 align="center">Bergamot 3DS</h1>
 
 <p align="center">
-  <strong>A no-JIT Nintendo 3DS core for Apple Silicon Mac and iPhone, built on Azahar, with a ready-to-build app and the Azahar patches that make it work.</strong>
+  3DS emulation for Mac and iPhone, with no JIT. Built on <a href="https://github.com/azahar-emu/azahar">Azahar</a>.
 </p>
 
 <p align="center">
-  <a href="docs/PLAYER.md">The app</a> ·
-  <a href="docs/THREEDS_SOURCE_PACKAGE.md">Integration guide</a> ·
-  <a href="docs/AZAHAR_PATCHES.md">Azahar patches</a> ·
-  <a href="#built-on-azahar">Built on Azahar</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="docs/RELEASE_READINESS.md">What is verified</a> ·
-  <a href="LICENSE">License</a>
+  <a href="https://github.com/sky-equals-fish/bergamot-3ds/releases/latest"><b>Download</b></a> ·
+  <a href="docs/PLAYER.md">App guide</a> ·
+  <a href="docs/THREEDS_SOURCE_PACKAGE.md">Use the core</a> ·
+  <a href="docs/AZAHAR_PATCHES.md">Azahar patches</a>
 </p>
 
 ---
 
-This repository is the 3DS side of [Bergamot](#about-bergamot), split out so
-other people can build it, play with it and improve it. It contains source, not
-prebuilt binaries, in three parts:
+Bergamot 3DS is the 3DS part of [Bergamot](#about-bergamot), our emulator
+project for Apple devices. It's a small app you can download and play with, and
+the same emulator core packaged so other apps can use it.
 
-| Part | What it is | Start here |
-| --- | --- | --- |
-| **Bergamot 3DS app** | A small Mac and iPhone/iPad app: open a game and play, saves kept automatically, settings for 1×–4× resolution, screen layout, GPU handoff and shaders | [docs/PLAYER.md](docs/PLAYER.md) |
-| **The core** | `ctr::Runtime` behind the CMake targets `Bergamot::ThreeDS` and `Bergamot::ThreeDSMetal`, for embedding 3DS emulation in your own app | [docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURCE_PACKAGE.md) |
-| **The Azahar add-on** | Five patches to pinned Azahar: Metal handoff and host bridge, compile-time no-JIT, async shaders, shader preparation, and a fix for freezes when games load code modules | [docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md) |
+It runs entirely without JIT, on iPhone and on Mac. No special entitlements, no
+debugger tricks, no AltServer step, and nothing a normal app isn't allowed to do.
 
-What makes it different from running Azahar on a Mac:
+## Download
 
-- **No JIT, on every platform.** Guest ARM11 code runs through Azahar's
-  FastInterp, which dispatches precompiled native handlers from decoded blocks
-  held in ordinary data memory. Dynarmic, the PICA shader JIT and their code
-  generators are excluded from the build. There is no JIT entitlement, no
-  debugger attachment, no AltServer step and no executable-memory workaround,
-  and the same binary policy applies to the Mac build.
-- **Zero-copy frames into Metal.** Azahar renders PICA through Vulkan on
-  MoltenVK. The core exports its output `VkImage` as an `MTLTexture` through
-  `VK_EXT_metal_objects`, and the host presents that texture directly. No
-  per-frame readback to CPU memory.
-- **A host contract you can build a product on.** One worker thread owns the
-  core; input setters are thread-safe; callback exceptions are contained at the
-  C boundary and rethrown to the host; saves and system data live under a root
-  you choose; GPU presentation has explicit ownership and completion rules.
-- **It is checked outside its own UI.** An independent example host builds
-  against `Bergamot::ThreeDS` and runs an original ARM11 probe, and a Mac test
-  interposer fails the run if anything requests executable memory.
+Grab the latest build from [Releases](https://github.com/sky-equals-fish/bergamot-3ds/releases/latest).
+
+**Mac** (Apple Silicon, macOS 13 or later)
+1. Download the Mac `.zip` and unzip it.
+2. The first time, right-click the app and choose **Open**. Builds aren't
+   notarized yet, so macOS asks once.
+3. Open a game with **File › Open Game** or drag it onto the window.
+
+**iPhone and iPad** (iOS 18 or later)
+The `.ipa` is unsigned. Install it with your sideloading tool of choice, such as
+AltStore or SideStore. Then import games from the app, or drop them into
+**Files › On My iPhone › Bergamot 3DS › Games**.
+
+Supported files: `.3ds`, `.cci`, `.cxi`, `.3dsx`, and decrypted `.cia`. Saves
+are kept automatically. You'll need your own games; none are included.
+
+### Settings
+
+| Setting | Options |
+| --- | --- |
+| Resolution | 1× native (default), 2×, 3×, 4× |
+| Screen layout | Stacked or side by side |
+| Shaders | Prepare cached shaders (default), or also compile new ones in the background |
+| GPU handoff | Standard (default) or queue-ordered (experimental) |
+
+On Mac, open **Settings** with ⌘,. On iPhone, resolution is on the game list.
+Native resolution runs best on most devices.
+
+Keyboard, game controllers, and the mouse (as the touch screen) all work. The
+full control layout is in the [app guide](docs/PLAYER.md).
 
 ## Built on Azahar
 
-This core **is Azahar**. [Azahar](https://github.com/azahar-emu/azahar) and its
-contributors wrote the ARM11 CPU emulation, the kernel and HLE services, the
-loaders, the audio, and the PICA graphics pipeline. Every game that runs here
-runs because of their work.
+The emulation itself is [Azahar](https://github.com/azahar-emu/azahar): the
+ARM11 CPU, the 3DS operating system services, audio, and the graphics pipeline.
+We couldn't have built this without it, and the credit for running your games
+belongs to the people who work on it.
 
-Is it a fork? Not in the GitHub sense: this repository does not contain Azahar's
-source tree. [`dependencies.json`](dependencies.json) pins one upstream commit,
-`tools/bootstrap.py` fetches it and applies the Bergamot patches in
-[`patches/`](patches). In the copyright sense, yes: the built core is a modified
-Azahar, a derivative work licensed like upstream under **GPL-3.0-or-later**, and
-everything Bergamot adds is GPL-3.0-or-later as well.
+This repo isn't a GitHub fork. It pins one Azahar commit and applies five small
+patches on top. Legally, the core you build is a modified Azahar under the same
+GPL-3.0-or-later license.
 
-| Patch | What it does |
-| --- | --- |
-| `0001-libretro-frame-synchronization` | Semaphore-correct Vulkan frame handoff, Metal export of the output image and command queue, and a small C bridge for title metadata, CIA installs and performance counters |
-| `0007-azahar-no-jit-build` | `BERGAMOT_NO_JIT`: removes Dynarmic, Oaknut, Xbyak and the PICA shader JIT from the build and forces JIT off on every platform |
-| `0008-azahar-libretro-async-shaders` | Exposes Azahar's existing async pipeline compilation to libretro hosts (off by default) |
-| `0009-azahar-libretro-shader-preparation` | Shader-cache progress reporting and a wait-until-built call, so play starts with every cached shader ready |
-| `0010-azahar-batch-cro-cache-invalidation` | Batches instruction-cache invalidation while a game loads a code module, instead of scanning the whole decoded-block cache once per relocation |
+Our patches add the Mac/iOS-specific parts: frame handoff into Metal, a build
+with every JIT removed, shader-cache preparation, and a fix for half-second
+freezes when games load code modules. They're described in
+[docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md), and most of them work on plain
+Azahar too.
 
-Details, and how to apply them to Azahar on its own, are in
-[docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md).
-The patches are Bergamot's responsibility and have not been submitted upstream.
-Graphics translation uses [MoltenVK](https://github.com/KhronosGroup/MoltenVK)
-(Apache-2.0). See [NOTICE.txt](NOTICE.txt) and
-[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+## Build from source
 
-## Quick start on a Mac
-
-Requirements: an Apple Silicon Mac, full Xcode (opened once), Git, Python 3,
-network access for the first bootstrap.
+You'll need an Apple Silicon Mac, Xcode, Git and Python 3. Building for iPhone
+also needs the iOS SDK that comes with Xcode.
 
 ```sh
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-python3 tools/bootstrap.py --simulator       # pin Azahar + submodules, apply patches, fetch MoltenVK, build the probe
+git clone https://github.com/sky-equals-fish/bergamot-3ds.git
+cd bergamot-3ds
+python3 tools/bootstrap.py                  # fetches Azahar and applies our patches
 export PATH="$PWD/.venv/bin:$PATH"
-python tools/build_core.py macos             # build/macos/bin/Release/azahar_libretro.dylib
-cmake -S systems/examples/three-ds -B build/standalone-3ds -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/standalone-3ds -j 4
-build/standalone-3ds/independent-three-ds artifacts/arm11-probe.3dsx "$(mktemp -d)"
-```
+python tools/build_core.py macos            # the emulator core
 
-The last command runs 180 frames of an original ARM11 homebrew program through
-the core with no UI and ends with `Standalone 3DS consumer passed`. Omit
-`--simulator` if you only need Mac and physical iOS. Never point a probe at a
-real save folder.
-
-For iPhoneOS and Simulator libraries:
-
-```sh
-python tools/build_core.py ios
-python tools/build_core.py ios-simulator
-```
-
-then configure `systems/3ds` with the matching `CTR_PLATFORM`, SDK and
-toolchain as shown in the [integration guide](docs/THREEDS_SOURCE_PACKAGE.md).
-Device and Simulator dylibs are both arm64 and are **not** interchangeable.
-
-## Build the app
-
-With the core built, the Mac app is one more CMake project:
-
-```sh
 cmake -S player -B build/player-macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DCTR_PLATFORM=macos
 cmake --build build/player-macos
 open "build/player-macos/Bergamot 3DS.app"
 ```
 
-Open a game with ⌘O or drag it onto the window. Settings (⌘,) chooses the
-internal resolution from 1× native up to 4×, the screen layout, GPU handoff mode
-and shader behaviour; native is the default. The iPhone build, controls, and
-`tools/package_player.py` (Mac zip, unsigned IPA, source archive) are covered in
-[docs/PLAYER.md](docs/PLAYER.md).
+iPhone builds, packaging, and signing are covered in [docs/PLAYER.md](docs/PLAYER.md).
 
-## Link it into your app
+## Use the core in your own app
+
+The core is a C++20 / Objective-C++ library with a CMake target, so you can put
+3DS emulation in your own Mac or iOS app without any of our UI.
 
 ```cmake
-cmake_minimum_required(VERSION 3.25)
-project(My3DSHost LANGUAGES CXX OBJCXX)
-add_subdirectory("/absolute/path/to/bergamot-3ds/systems/3ds" bergamot)
-target_link_libraries(YourHost PRIVATE Bergamot::ThreeDS)        # runtime + Vulkan/MoltenVK handoff
-target_link_libraries(YourHost PRIVATE Bergamot::ThreeDSMetal)   # optional: Metal presenter helpers
+add_subdirectory(/path/to/bergamot-3ds/systems/3ds bergamot)
+target_link_libraries(YourApp PRIVATE Bergamot::ThreeDS)       # the emulator
+target_link_libraries(YourApp PRIVATE Bergamot::ThreeDSMetal)  # optional Metal presenter
 ```
 
 ```cpp
-#include <runtime.hpp>
-#include <metal_presenter.h>
-
-// On your emulation worker thread, with app-owned persistent storage:
-ctr::Runtime runtime(storage_root, /*vulkan=*/true, /*scale=*/2);   // scale 1..4
+ctr::Runtime runtime(storage_root, /*vulkan=*/true, /*scale=*/1);
 runtime.set_gpu_presenter([&](VkDevice device, VkImage image, unsigned w, unsigned h) {
-    id<MTLTexture> texture = CTRExportTexture(device, image);     // zero-copy
-    [presenter present:texture on:metalLayer];                    // your CAMetalLayer
+    [presenter present:CTRExportTexture(device, image) on:metalLayer];
 });
-runtime.set_audio_sink([&](const int16_t* stereo, size_t frames) { /* copy into your audio queue */ });
 runtime.load(game_path);
-const auto av = runtime.av_info();          // fps and sample rate for pacing
-while (!runtime.stopped()) {
-    runtime.step();                         // one guest frame
-    // sleep until the next frame deadline derived from av.timing.fps
-}
+runtime.wait_for_shader_cache();
+while (!runtime.stopped()) runtime.step();   // pace to runtime.av_info().timing.fps
 runtime.unload();
 ```
 
-Embed the matching `azahar_libretro.dylib` in your bundle's Frameworks directory
-and sign it with your own identity. Buttons use libretro joypad IDs through
-`set_button`; Circle Pad, C-Stick and touch use signed normalized coordinates.
-The [integration guide](docs/THREEDS_SOURCE_PACKAGE.md) spells out the full
-contract and the opt-in queue-ordered presentation mode.
+The [integration guide](docs/THREEDS_SOURCE_PACKAGE.md) covers threading,
+audio, input, saves, and embedding the core in an iOS app.
 
-## How it works
+## Technical notes
 
-```text
-Guest ARM11 / Thumb / VFP code  ──►  Azahar FastInterp: decoded basic blocks (data) ──► precompiled handlers
-Guest PICA command lists        ──►  Azahar renderer ──► Vulkan ──► MoltenVK ──► MTLTexture
-MTLTexture                      ──►  Bergamot Metal presenter ──► CAMetalLayer drawable
-```
+- **No JIT.** Guest code runs on Azahar's FastInterp interpreter. The JIT
+  compilers aren't just switched off; they're removed from the build. A test hook
+  fails the run if anything asks for executable memory.
+- **Graphics.** Azahar renders with Vulkan, MoltenVK translates that to Metal,
+  and the finished frame goes straight to the screen with no copy back to the CPU.
+- **Frame pacing.** The game runs on its own 59.83 Hz clock, independent of the
+  display. On a Mac this matters: a ProMotion screen idling at 48 Hz used to hold
+  games at 80% speed.
+- **Smoothness.** Shaders a game has used before are built before play starts.
+  Code-module loads no longer freeze the game.
 
-- **CPU.** FastInterp caches decoded basic blocks and dispatches existing native
-  handlers with computed goto. Nothing is written to executable pages. Static
-  instruction timing from upstream's tick tables is kept so guest time is unchanged.
-- **Graphics.** The host negotiates a Vulkan device through the libretro
-  hardware-render interface, requests `VK_EXT_metal_objects`, and receives the
-  core's render-ready semaphore each frame. Three presentation modes exist:
-  **serialized** (default: CPU waits for the render fence, presents, waits for
-  Metal before the core reuses its image), **deferred** (Metal completion wait
-  moves to the image-reuse boundary) and **queue-ordered** (the presenter commits
-  on MoltenVK's own `MTLCommandQueue`, so Metal's in-order queue orders render,
-  present and reuse on the GPU and the CPU no longer waits inside the frame).
-  Queue-ordered is opt-in until matched gameplay scenes are measured; it halved
-  per-frame emulation-thread work in iPhone 15 Pro boot comparisons.
-- **Lifecycle.** One core instance per process (upstream state is global), one
-  title per `Runtime`. Construct, load, step, unload and destroy on the same
-  thread. Errors raised inside libretro callbacks are stored and rethrown from
-  `step()` so the core never unwinds through C frames.
-- **Storage.** The data root you pass gets `system/` and `saves/`; Azahar's
-  usual layout lives below them. Installed CIAs and updates use the core's own
-  title-management path through the C bridge.
+## Status
 
-The full technical write-up, including the measured numbers and their
-limitations, is in [`docs/`](docs). Start with
-[THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURCE_PACKAGE.md),
-[PRESENTATION_SYNC_EXPERIMENT.md](docs/PRESENTATION_SYNC_EXPERIMENT.md) and
-[RUNTIME_AUDIT.md](docs/RUNTIME_AUDIT.md).
-
-## What is verified, and what is not
-
-| Verified | Not yet |
-| --- | --- |
-| Compile-time no-JIT core builds for macOS, iPhoneOS and Simulator | Complete binary audit of every linked component for executable-memory use |
-| Independent Mac host runs the original ARM11 probe with the executable-memory denial interposer active | Renewed physical-device gameplay validation after the compile-time JIT exclusion |
-| Serialized, deferred and queue-ordered presentation produce byte-identical 4× captures under Metal API validation | Matched warm-cache gameplay benchmarks at 3× and 4×; sustained thermal and audio behaviour |
-| Lifecycle tests: ownership, malformed titles, callback fault injection, sequential sessions, guest clock | Universal title compatibility; the probe is a smoke test, not an ARM conformance suite |
-| Alpha Sapphire plus update boots on iPhone 15 Pro at 4× near 100% guest speed in all modes | Smooth sustained 4× gameplay on iPhone |
-| Mac host, 3-minute intro runs at 4×: with patch 0010 no gameplay frame over 100 ms (worst 81 ms) in three runs, versus a 0.7–0.9 s freeze in 3 of 5 runs before | The patched core (0008–0010) on a physical iPhone |
-| Mac host: 100% guest speed after removing vsync-blocking presents (a 48 Hz ProMotion rate had held it at 80%) | Long sessions and more titles |
-
-[RELEASE_READINESS.md](docs/RELEASE_READINESS.md) keeps the evidence boundaries
-current. Mac and Simulator results do not establish iPhone performance.
-
-## Bring your own content
-
-No games, console keys, firmware, saves or Apple signing material are in this
-repository, and the tools do not download them. Supply titles you have the right
-to use. Encrypted content needs your own `keys.txt`; encrypted CIAs are rejected,
-use a decrypted export from your console. See [USER_FILES.md](docs/USER_FILES.md).
+This is an early preview. On a Mac (M3 Pro), Pokémon Alpha Sapphire runs at
+full speed, with no freezes over 100 ms after startup in our 3-minute test runs.
+An earlier build of the core has run the same game on an iPhone 15 Pro, but
+this app's iPhone build hasn't been tested on a device yet. Compatibility beyond the games we've tried is unknown.
+Measurements and history are in [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md).
 
 ## About Bergamot
 
-Bergamot is the iPhone and Mac app this core was built for: a pixel-styled
-front end for 3DS, DS and GBA with a game library, cover art, touch controls and
-Fuitlet, the companion pictured above. The app, its DS and GBA adapters and the
-broader no-JIT systems research live in the main Bergamot repository, which is
-being prepared for publication separately.
+Bergamot is a pixel-art emulator front end for iPhone and Mac, covering 3DS, DS
+and GBA. Fuitlet, the sprout at the top of this page, lives on its home screen.
+The full app lives in a separate repository.
 
 ## License
 
-Bergamot's code is **GPL-3.0-or-later**, see [LICENSE](LICENSE). Azahar is
-GPL-3.0-or-later; MoltenVK is Apache-2.0; libretro headers are MIT. Distributing
-a binary built from this source requires shipping the exact corresponding
-sources, including the pinned dependencies and these patches. Nintendo 3DS and
-game names are used to identify compatibility; Bergamot is independent and not
-affiliated with Nintendo or the upstream projects.
+GPL-3.0-or-later, same as Azahar. See [LICENSE](LICENSE), [NOTICE.txt](NOTICE.txt)
+and [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). MoltenVK is Apache-2.0.
+Each release includes the full matching source, including the patched Azahar tree.
+
+No games, keys or firmware are included. Nintendo 3DS is a trademark of
+Nintendo; Bergamot isn't affiliated with Nintendo or the Azahar project.
