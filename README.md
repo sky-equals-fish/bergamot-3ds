@@ -2,7 +2,7 @@
      repository's root; tools/prepare_source_release.py copies this file to README.md
      when exporting the 3ds component. -->
 <p align="center">
-  <img src="docs/art/fuitlet.png" width="140" alt="Fuitlet, the Bergamot mascot: a round green sprout with a white headband">
+  <img src="docs/art/fuitlet.png" width="140" alt="Bergie, the Project Bergamot mascot: a round green sprout with a white headband">
 </p>
 
 <h1 align="center">Bergamot 3DS</h1>
@@ -20,9 +20,9 @@
 
 ---
 
-Bergamot 3DS is the 3DS part of [Bergamot](#about-bergamot), our emulator
-project for Apple devices. It's a small app you can download and play with, and
-the same emulator core packaged so other apps can use it.
+Bergamot 3DS is part of [Project Bergamot](#about-project-bergamot) by Sky=Fish.
+It's a small app you can download and play with, and the same emulator core
+packaged so other apps can use it.
 
 It runs entirely without JIT, on iPhone and on Mac. No special entitlements, no
 debugger tricks, no AltServer step, and nothing a normal app isn't allowed to do.
@@ -138,11 +138,17 @@ An earlier build of the core has run the same game on an iPhone 15 Pro, but
 this app's iPhone build hasn't been tested on a device yet. Compatibility beyond the games we've tried is unknown.
 Measurements and history are in [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md).
 
-## About Bergamot
+## About Project Bergamot
 
-Bergamot is a pixel-art emulator front end for iPhone and Mac, covering 3DS, DS
-and GBA. Fuitlet, the sprout at the top of this page, lives on its home screen.
-The full app lives in a separate repository.
+Project Bergamot is Sky=Fish's work on emulation for Apple devices without JIT.
+It includes:
+
+- **Bergamot**, a pixel-art emulator front end for iPhone and Mac. It plays 3DS,
+  DS and GBA today. GameCube, Wii, Wii U, Switch, PS1, PS2, PSP and more are in
+  development.
+- **Bergamot 3DS**, this repo: the 3DS core and a standalone app.
+
+Bergie, the sprout at the top of this page, is the project's mascot.
 
 ## License
 
