@@ -79,7 +79,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<false/>
+	<true/>
 	<key>MinimumOSVersion</key>
 	<string>18.0</string>
 	<key>UIApplicationSceneManifest</key>

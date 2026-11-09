@@ -134,6 +134,6 @@ static NSString* BGImportShaderFiles(NSArray<NSURL*>* urls, BOOL* failed) {
     for (NSString* title in byTitle)
         for (NSString* stage in @[@"vs", @"fs", @"pl"])
             if (!byTitle[title][[NSString stringWithFormat:@"%@_%@.vkch", title, stage]])
-                return @"Pick all of a game's shader files together: its _vs, _fs, _gs and _pl .vkch files.";
+                return @"Pick a game's shader files together: at least its _vs, _fs and _pl .vkch files, plus _gs if it has one.";
     return BGMergeShaderSets(byTitle, failed);
 }

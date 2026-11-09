@@ -73,7 +73,7 @@ def package_source(version, out):
     target = out / f"Bergamot-3DS-{version}-source.tar.gz"
     prefix = f"bergamot-3ds-{version}-source"
     names = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "--cached", "--others", "--exclude-standard", "-z", "."]).split(b"\0")
-    keep_top = {"CMakeLists.txt", "LICENSE", "NOTICE.txt", "THIRD_PARTY_NOTICES.txt", "dependencies.json", "requirements-build.txt"}
+    keep_top = {"CMakeLists.txt", "LICENSE", "THIRD_PARTY_NOTICES.txt", "dependencies.json", "requirements-build.txt"}
     tools = {"bootstrap.py", "build_core.py", "make_probe.py", "package_player.py", "make_xcode_kit.py"}
     art = ("default-control-", "default-dpad-", "default-circle-", "default-cstick-", "default-skin-bezel-", "default-skin-phone-details-", "default-background-",
            "default-library-row-", "default-field-", "default-panel-", "default-font-", "default-icon-3ds-", "default-segment-")
@@ -94,6 +94,7 @@ def package_source(version, out):
             if wanted(rel) and (ROOT / rel).is_file():
                 if rel.suffix.lower() in DENIED: raise SystemExit(f"Refusing to package {rel}")
                 tar.add(ROOT / rel, f"{prefix}/{rel}")
+        tar.add(ROOT / "docs/THREEDS_NOTICE.txt", f"{prefix}/NOTICE.txt")   # the 3DS-only notice
         azahar = ROOT / "vendor/azahar"
         def skip_git(info):
             parts = Path(info.name).parts

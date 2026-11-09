@@ -140,7 +140,8 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
 // window is fully covered: macOS throttles drawables for hidden windows, which otherwise stalls play.
 - (void)setPresenting:(BOOL)presenting;
 - (void)stop;
-// Installs a decrypted update or DLC CIA into the data root; game must not be running.
+// Installs an update or DLC CIA into the data root, decrypting it with the user's keys if needed.
+// No game may be running.
 - (void)installPackage:(NSURL*)package completion:(void (^)(NSString* message, BOOL failed))completion;
 @end
 
@@ -316,7 +317,7 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                 runtime.set_audio_sink([player, format, pending, queued, queueLimit](const int16_t* samples, std::size_t count) {
                     if (!player || !count) return;
                     pending->insert(pending->end(), samples, samples + count * 2);
-                    constexpr std::size_t batch = 512; std::size_t offset = 0;   // ~11 ms buffers
+                    constexpr std::size_t batch = 512; std::size_t offset = 0;   // ~15.6 ms at 32,728 Hz
                     while (pending->size() - offset >= batch * 2) {
                         if (queued->load() + batch <= queueLimit) {
                             AVAudioPCMBuffer* buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:batch];

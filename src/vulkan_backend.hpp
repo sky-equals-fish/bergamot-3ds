@@ -9,7 +9,8 @@
 
 namespace ctr {
 // Vulkan/MoltenVK host with synchronous readback and zero-copy Metal presentation.
-// Deferred presentation waits at the core's image-reuse boundary, not at submit.
+// Two handoff modes: Serialized (default) and QueueOrdered. A "deferred" host is Serialized with a
+// presenter that returns a completion, drained at the core's image-reuse boundary instead of at submit.
 class VulkanBackend final {
 public:
     // How the core's Vulkan rendering and the host's Metal presentation are ordered.

@@ -33,8 +33,9 @@ Grab the latest build from [Releases](https://github.com/sky-equals-fish/bergamo
 
 **Mac** (Apple Silicon, macOS 13 or later)
 1. Download the Mac `.zip` and unzip it.
-2. The first time, right-click the app and choose **Open**. Builds aren't
-   notarized yet, so macOS asks once.
+2. The first time, open the app, then allow it under **System Settings ›
+   Privacy & Security › Open Anyway**. Builds aren't notarized yet, so macOS
+   asks once.
 3. Open a game with **File › Open Game** or drag it onto the window.
 
 **iPhone and iPad** (iOS 18 or later)

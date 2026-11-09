@@ -23,12 +23,7 @@ int main(int argc, char** argv) {
                 (update.title_id & 0xffffffff) != (base.title_id & 0xffffffff))
                 throw std::runtime_error("Update does not match this base title: " + std::string(argv[i]));
         }
-        if (base.cia_content_encrypted)
-            throw std::runtime_error("Base CIA content is encrypted; provide a decrypted export");
-        for (int i = 3; i < argc; ++i) {
-            if (runtime.inspect(argv[i]).cia_content_encrypted)
-                throw std::runtime_error("Update CIA content is encrypted; provide a decrypted export: " + std::string(argv[i]));
-        }
+        // Encrypted CIAs are decrypted during install with the user's keys.txt (patch 0011).
         auto launch = std::filesystem::absolute(argv[2]);
         if (base.is_cia) launch = runtime.install_package(argv[2]);
         for (int i = 3; i < argc; ++i) {

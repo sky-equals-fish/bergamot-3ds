@@ -8,7 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../systems/3ds" bergamot)
 set(BG_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 set(BG_CORE "${BG_ROOT}/build/${CTR_PLATFORM}/bin/Release/azahar_libretro.dylib")
-set(BG_LICENSES "${BG_ROOT}/LICENSE" "${BG_ROOT}/NOTICE.txt" "${BG_ROOT}/THIRD_PARTY_NOTICES.txt")
+# The app ships the 3DS-only notice, renamed to NOTICE.txt, not the repository-wide prototype notice.
+configure_file("${BG_ROOT}/docs/THREEDS_NOTICE.txt" "${CMAKE_CURRENT_BINARY_DIR}/NOTICE.txt" COPYONLY)
+set(BG_LICENSES "${BG_ROOT}/LICENSE" "${CMAKE_CURRENT_BINARY_DIR}/NOTICE.txt" "${BG_ROOT}/THIRD_PARTY_NOTICES.txt")
 
 if(CTR_PLATFORM MATCHES "^ios")
     add_executable(Bergamot3DS MACOSX_BUNDLE ios_player.mm)

@@ -86,7 +86,7 @@ def copy_inputs(kit):
     (kit / "Info.plist").write_bytes(plistlib.dumps(info))
 
 
-def pbxproj():
+def pbxproj(version):
     o = []  # (section, id, body)
 
     def add(section, name, body):
@@ -138,7 +138,7 @@ def pbxproj():
         'HEADER_SEARCH_PATHS = ("$(SRCROOT)/Sources", "$(SRCROOT)/Sources/include", ); '
         'INFOPLIST_FILE = Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 18.0; '
         'LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", ); '
-        'LIBRARY_SEARCH_PATHS = ("$(SRCROOT)/Libraries", ); MARKETING_VERSION = 0.1.0; '
+        'LIBRARY_SEARCH_PATHS = ("$(SRCROOT)/Libraries", ); MARKETING_VERSION = ' + version + '; '
         f'OTHER_LDFLAGS = ("$(inherited)", {ldflags} ); '
         # Unique per team, so a free Apple ID can register it without colliding with anyone else's.
         'PRODUCT_BUNDLE_IDENTIFIER = "io.bergamot.threeds.$(DEVELOPMENT_TEAM:lower)"; PRODUCT_NAME = Bergamot3DS; '
@@ -211,7 +211,7 @@ The emulator core and libraries are prebuilt. The Simulator is not supported for
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/xcode-kit")
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", default=plistlib.loads((ROOT / "player/MacInfo.plist").read_bytes())["CFBundleShortVersionString"])
     args = parser.parse_args()
     kit = args.output / "Bergamot3DS"
     shutil.rmtree(kit, ignore_errors=True)
@@ -219,7 +219,7 @@ def main():
     copy_inputs(kit)
     proj = kit / "Bergamot3DS.xcodeproj"
     (proj / "xcshareddata/xcschemes").mkdir(parents=True)
-    text, target = pbxproj()
+    text, target = pbxproj(args.version)
     (proj / "project.pbxproj").write_text(text)
     (proj / "xcshareddata/xcschemes/Bergamot3DS.xcscheme").write_text(scheme(target))
     (kit / "README.txt").write_text(README)

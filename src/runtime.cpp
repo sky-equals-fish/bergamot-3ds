@@ -95,7 +95,7 @@ std::filesystem::path Runtime::install_package(const std::filesystem::path& file
     if (attempted_load_) throw std::logic_error("Install packages before starting a title");
     std::array<char, 4096> path{};
     const auto status = ctr_install_cia(file.c_str(), path.data(), path.size());
-    if (status == 5) throw std::runtime_error("This package contains encrypted content; use your decrypted dump");
+    if (status == 5) throw std::runtime_error("Couldn't decrypt this package. Install your keys.txt (and seeddb.bin for seed-encrypted titles), then try again");
     if (status) throw std::runtime_error("Package installation failed (" + std::to_string(status) + ")");
     return path.data();
 }

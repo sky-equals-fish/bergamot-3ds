@@ -20,7 +20,7 @@ Last updated 2026-11-09. Covers the 3DS core and the Bergamot 3DS app only.
   "Preparing shaders", then 4 pauses over 100 ms (new effects the earlier run hadn't seen).
   Fully warm: none. Dynamic state renders the same 15 sampled frames identically.
 - **Mac, encrypted CIA (patch 0011).** An encrypted Alpha Sapphire `.cia` installs, decrypts
-  with the user's `keys.txt`, and runs at 59.8 fps / 100% speed.
+  with the user's `keys.txt`, and runs at 59.9 fps / 100% speed.
 
 ## Not tested yet
 
