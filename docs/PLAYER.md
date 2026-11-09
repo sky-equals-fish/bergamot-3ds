@@ -18,7 +18,8 @@ search. Tap a game to play; HOME opens the pause menu.
 
 Supported files are `.3ds`, `.cci`, `.cxi`, `.3dsx` and decrypted `.cia`.
 Updates and DLC go through **File › Install Update or DLC** on Mac, or
-**Install Update** on iPhone. Save in the game before you stop it.
+**Update** on iPhone. On iPhone, **Keys** installs your `keys.txt` (and optionally
+`boot9.bin` and `otp.bin`) into Azahar's `sysdata` folder after checking them. Save in the game before you stop it.
 
 | Mac keys | 3DS |
 | --- | --- |

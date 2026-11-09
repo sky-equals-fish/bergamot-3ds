@@ -37,7 +37,7 @@ def selected(relative, component):
     if parts[0] == 'player': return True   # Bergamot 3DS app (Mac + iOS) around the core
     if component == '3ds' and parts[0] == 'ios':
         # Only what the player reuses: the 3DS touch controls and their default-palette art.
-        return relative.as_posix() in ('ios/pixel_controls.h', 'ios/game_art.hpp') or (len(parts) == 4 and parts[2] == 'exports' and PLAYER_ART.match(relative.name) is not None)
+        return relative.as_posix() in ('ios/pixel_controls.h', 'ios/game_art.hpp', 'ios/user_keys.h') or (len(parts) == 4 and parts[2] == 'exports' and PLAYER_ART.match(relative.name) is not None)
     if parts[0] == 'docs':
         if len(parts) == 3 and parts[1] == 'screenshots':
             return component == 'app' and relative.name in {'README.md', 'home.png', '3ds-controls.png', 'ds-controls.png', 'gba-controls.png'}

@@ -17,6 +17,14 @@ static UIImage* BGAsset(NSString* name, NSInteger frame) {
 static void BGNearest(UIView* v) { v.layer.magnificationFilter = kCAFilterNearest; v.layer.minificationFilter = kCAFilterNearest; }
 #import "pixel_controls.h"
 #include "game_art.hpp"
+#import "user_keys.h"   // the Bergamot app's keys.txt validator
+
+static BOOL BGGameRanThisLaunch = NO;   // Azahar reads keys.txt once, when the first game starts
+static NSURL* BGSysDataFolder() {
+    NSURL* u = [BGPlayerDataRoot() URLByAppendingPathComponent:@"saves/Azahar/sysdata"];
+    [NSFileManager.defaultManager createDirectoryAtURL:u withIntermediateDirectories:YES attributes:nil error:nil];
+    return u;
+}
 
 static NSArray<NSString*>* BGGameExtensions() { return @[@"3ds", @"cci", @"cxi", @"cia", @"3dsx"]; }
 static NSURL* BGGamesFolder() {
@@ -118,7 +126,7 @@ static void BGAlert(UIViewController* vc, NSString* title, NSString* message) {
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     if (!_game) { _controls.previewMode = YES; _loading.hidden = YES; [_controls setNeedsDisplay]; return; }   // layout preview (test hook)
-    if (!_session.running) { UIApplication.sharedApplication.idleTimerDisabled = YES; [_session run:_game]; }
+    if (!_session.running) { UIApplication.sharedApplication.idleTimerDisabled = YES; BGGameRanThisLaunch = YES; [_session run:_game]; }
 }
 - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear:animated]; UIApplication.sharedApplication.idleTimerDisabled = NO; }
 - (void)resign { [_controls releaseTouches]; [_session setPaused:YES]; }
@@ -269,7 +277,7 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
 @end
 @implementation BGGamesController {
     UICollectionView* _grid; NSArray<NSURL*>* _games; NSArray<NSURL*>* _shown; UILabel* _message; BGSegmentControl* _scale;
-    UITextField* _search; UILabel* _scaleNote; BOOL _pickingUpdate; NSCache<NSString*, NSDictionary*>* _art;
+    UITextField* _search; UILabel* _scaleNote; BOOL _pickingUpdate, _pickingKeys; NSCache<NSString*, NSDictionary*>* _art;
 }
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
 - (void)viewDidLoad {
@@ -284,7 +292,8 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     [title.heightAnchor constraintEqualToConstant:28].active = YES; title.accessibilityLabel = @"Bergamot 3DS";
     UIStackView* head = [[UIStackView alloc] initWithArrangedSubviews:@[bergie, title]]; head.spacing = 10; head.alignment = UIStackViewAlignmentCenter;
     UIView* rule = [UIView new]; rule.backgroundColor = BGAccent(); [rule.heightAnchor constraintEqualToConstant:2].active = YES;
-    UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[BGPanelButton(@"IMPORT", self, @selector(importGame)), BGPanelButton(@"UPDATE", self, @selector(importUpdate))]];
+    UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[BGPanelButton(@"IMPORT", self, @selector(importGame)),
+        BGPanelButton(@"UPDATE", self, @selector(importUpdate)), BGPanelButton(@"KEYS", self, @selector(importKeys))]];
     buttons.spacing = 10; buttons.distribution = UIStackViewDistributionFillEqually;
     _scale = [[BGSegmentControl alloc] initWithTitles:@[@"AUTO", @"1X", @"2X", @"3X", @"4X"]
                                     accessibilityNames:@[@"Automatic upscaling", @"Native upscaling", @"2× upscaling", @"3× upscaling", @"4× upscaling"]];
@@ -417,8 +426,49 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     };
     [self presentViewController:play animated:YES completion:nil];
 }
+- (void)importKeys {
+    _pickingKeys = YES; _pickingUpdate = NO;
+    UIDocumentPickerViewController* p = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeData, UTTypePlainText] asCopy:YES];
+    p.delegate = self; p.allowsMultipleSelection = YES; [self presentViewController:p animated:YES completion:nil];
+}
+// keys.txt (validated like the Bergamot app: AES section, known key names, 32 hex digits each),
+// plus optional boot9.bin and otp.bin checked by size. Everything goes to Azahar's sysdata folder.
+- (void)installKeyFiles:(NSArray<NSURL*>*)urls {
+    NSMutableArray* done = [NSMutableArray new]; NSMutableArray* problems = [NSMutableArray new];
+    NSURL* sys = BGSysDataFolder();
+    for (NSURL* u in urls) {
+        NSString* name = u.lastPathComponent.lowercaseString; NSData* data = [NSData dataWithContentsOfURL:u];
+        if (!data) { [problems addObject:[NSString stringWithFormat:@"Couldn't read %@.", u.lastPathComponent]]; continue; }
+        if ([name hasSuffix:@".txt"]) {
+            // Accepts keys.txt or Citra's older aes_keys.txt; older files name the scrambler constant
+            // "generator", which Azahar calls "generatorConstant". Always saved as keys.txt, the only
+            // name this Azahar reads.
+            NSString* raw = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
+            NSRegularExpression* old = [NSRegularExpression regularExpressionWithPattern:@"(?m)^\\s*generator\\s*=" options:0 error:nil];
+            raw = [old stringByReplacingMatchesInString:raw options:0 range:NSMakeRange(0, raw.length) withTemplate:@"generatorConstant="];
+            NSString* keys = BGValidatedAESKeys([raw dataUsingEncoding:NSUTF8StringEncoding]);
+            if (!keys) { [problems addObject:[NSString stringWithFormat:@"%@ has a line that isn't a valid AES key.", u.lastPathComponent]]; continue; }
+            [keys writeToURL:[sys URLByAppendingPathComponent:@"keys.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            [done addObject:[NSString stringWithFormat:@"keys.txt (%lu keys)", (unsigned long)([keys componentsSeparatedByString:@"="].count - 1)]];
+        } else if ([name isEqualToString:@"boot9.bin"] || [name isEqualToString:@"otp.bin"]) {
+            const NSUInteger want = [name isEqualToString:@"otp.bin"] ? 256 : 65536;
+            if (data.length != want && !([name isEqualToString:@"boot9.bin"] && data.length == 32768)) {
+                [problems addObject:[NSString stringWithFormat:@"%@ is the wrong size.", u.lastPathComponent]]; continue;
+            }
+            [data writeToURL:[sys URLByAppendingPathComponent:name] atomically:YES]; [done addObject:name];
+        } else {
+            [problems addObject:[NSString stringWithFormat:@"%@ isn't keys.txt, boot9.bin or otp.bin.", u.lastPathComponent]];
+        }
+    }
+    NSMutableString* text = [NSMutableString new];
+    if (done.count) [text appendFormat:@"Installed %@.", [done componentsJoinedByString:@", "]];
+    if (done.count && BGGameRanThisLaunch) [text appendString:@" Close and reopen the app so they take effect."];
+    if (problems.count) [text appendFormat:@"%@%@", text.length ? @" " : @"", [problems componentsJoinedByString:@" "]];
+    _message.text = text;
+    if (problems.count && !done.count) BGAlert(self, @"Keys not installed", [problems componentsJoinedByString:@"\n"]);
+}
 - (void)pick:(NSArray<NSString*>*)exts update:(BOOL)update {
-    _pickingUpdate = update;
+    _pickingUpdate = update; _pickingKeys = NO;
     UIDocumentPickerViewController* p = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:BGTypes(exts) asCopy:YES];
     p.delegate = self; p.allowsMultipleSelection = !update; [self presentViewController:p animated:YES completion:nil];
 }
@@ -426,6 +476,7 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
 - (void)importUpdate { [self pick:@[@"cia"] update:YES]; }
 - (void)documentPicker:(UIDocumentPickerViewController*)c didPickDocumentsAtURLs:(NSArray<NSURL*>*)urls {
     (void)c;
+    if (_pickingKeys) { _pickingKeys = NO; [self installKeyFiles:urls]; return; }
     if (_pickingUpdate) {
         _message.text = @"Installing…";
         BG3DSSession* installer = [[BG3DSSession alloc] initWithLayer:nil];

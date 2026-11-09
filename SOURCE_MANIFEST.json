@@ -14,7 +14,7 @@
     "THIRD_PARTY_NOTICES.txt": "de9b49a73c89e0e7820fe8352b06d7be8655f29110efe59323e03d64cc7604c9",
     "dependencies.json": "009e900f6fa98a47e43712d6f94582a2b4098573bfe3a4b5432705860d409eab",
     "docs/AZAHAR_PATCHES.md": "b0de02974e05daba59bc9791876a8ec187abdbb7bed7309db1c4842826d89f11",
-    "docs/PLAYER.md": "c785e079a17d9ad1acdef57c88ff02c2c79c1176e38fde95250bd7a545c5bf10",
+    "docs/PLAYER.md": "2c456d037293ee4a3f198c213cbb565b5856afa796f4ab618b471087d726fe53",
     "docs/PRESENTATION_SYNC_EXPERIMENT.md": "16082e528a59cbfdb1bf7dec43bd84fa8f5f9c1055cd6f011b94fe6cffd0bb7c",
     "docs/STATUS.md": "a6a1ef6f6b50f29ad8ba52651a1bfcb9e5e16c61860ca551502f2af0e637e21d",
     "docs/THREEDS_SOURCE_PACKAGE.md": "7af4e58e0f80fc67b6b4db127f0681522fd4d929b93d1f72fbba66b85d39aa31",
@@ -78,6 +78,7 @@
     "ios/PixelArt/exports/default-skin-phone-details-0.png": "d9acb55fdb2cd4e9283327b7645e44dc5927c621277cdef0e6dcdfe16268630a",
     "ios/game_art.hpp": "76ced602294924799816b98034a84e05693d9d01879eb5eeb29f3c493c86d1c9",
     "ios/pixel_controls.h": "02659e6674869d4b11fd1aedbe56c1781821f0f7dc9d75af942a050a8c82cae8",
+    "ios/user_keys.h": "229c06e18dcd9c0dbc5f6f5d9abe3466b276e644ef2bfd7aa1f1a994422e46fe",
     "patches/0001-libretro-frame-synchronization.patch": "f72c7a237afd8131db85a66e459474c08d59b2e5295590b458fe62acf6ebb89e",
     "patches/0007-azahar-no-jit-build.patch": "49def3d92157335dbf6d0852d848215f9f977b3cbc75c53e417bafb321540c3c",
     "patches/0008-azahar-libretro-async-shaders.patch": "ace6a2bb6f91c1185daaa0cab1fcb925a62def1d0053832e34d1fadfbd3812c8",
@@ -92,7 +93,7 @@
     "player/Icons/fuitlet.png": "bf78db64d1156febbf293f7ddf374ab9cd7544fc9e0454af82a4e5ca368d8ca9",
     "player/MacInfo.plist": "cb13cfa88371e749d1cb9fb71668039f6026a440552a9a83ddbc93dffe1aee70",
     "player/iOSInfo.plist": "00f53389b8aa62104acb33dc821e09d7169f7cfdfbe0e3db9dad6022c02fb443",
-    "player/ios_player.mm": "688fa8e2694d2cdd40ddea68e6f8674f8ccd168ecab8731e106b092d8e0e65d9",
+    "player/ios_player.mm": "56aa058fd1f80452f6fe215eff0b1a501648c37cab8a20e7b972673759192219",
     "player/mac_player.mm": "e06b7e20c69a46900257f5cc6c82323505500bbc469b9e71a527d19d1f865428",
     "player/player_session.h": "4d1d317fb5b989dcee25cbaf87e49e85496322c780d9909c6de8bcae7447279b",
     "requirements-build.txt": "4ac18b0adf907f30a6fc02a0212d67f82e4ef5157a861481ed34b05135a399cc",
@@ -119,8 +120,8 @@
     "tools/bootstrap.py": "c85147eb97b824a0b4949d7631e82cff3631f204e01ceccccb86fa44ea470546",
     "tools/build_core.py": "521dc66f2154cff0fd691094bb59af5bf4f4095f89100324eeea0b31e67bd993",
     "tools/make_probe.py": "b4abbf01b203c8c4defcd8a11e84198104119acebb319d11e38aa7203079c3d5",
-    "tools/make_xcode_kit.py": "939771287b826829a79381a714b0a9e965dc867ed38adab127f65a77e7dc4cde",
-    "tools/package_player.py": "12595acaba8a07f31a2dd7aa26de3df3efdb4796deaae64b7132616bf8864aec",
-    "tools/prepare_source_release.py": "5deefbf6978cf0930d5f134afb1b3b54dc29fc98b4c717d5d83c63f3ecd1d4a8"
+    "tools/make_xcode_kit.py": "1a327bb915a00fd72d8ac3230474fb6982dd5229d7491a803702ed94b34bd35c",
+    "tools/package_player.py": "5f31f5c91b612f3740de5efbc5223fd9362e7fe08859b6ba580de1528653a889",
+    "tools/prepare_source_release.py": "9df99bd90aa9f0616210bd77a1be86618d449360e8cd83772f8b71f20e272ab1"
   }
 }

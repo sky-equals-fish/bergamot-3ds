@@ -84,7 +84,7 @@ def package_source(version, out):
         if p[0] == "patches": return rel.name in PATCHES
         if p[0] == "tools": return rel.name in tools
         if p[0] == "tests": return len(p) == 2
-        if p[0] == "ios": return rel.name in ("pixel_controls.h", "game_art.hpp") or (len(p) == 4 and p[2] == "exports" and rel.name.startswith(art))
+        if p[0] == "ios": return rel.name in ("pixel_controls.h", "game_art.hpp", "user_keys.h") or (len(p) == 4 and p[2] == "exports" and rel.name.startswith(art))
         return False
     with tarfile.open(target, "w:gz") as tar:
         for raw in names:
