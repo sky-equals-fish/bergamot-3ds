@@ -43,8 +43,6 @@ On Mac, everything is in **Settings** (⌘,), and resolution and layout are also
 in the **Emulation** menu. On iPhone, resolution is on the game list. Resolution,
 shaders and GPU handoff take effect the next time a game starts.
 
-Native resolution runs best. Higher settings look sharper but cost GPU time.
-
 **About shaders:** when a game starts, the app builds every shader that game has
 used before ("Preparing shaders"), so effects you've already seen never pause the
 game. The first time a brand-new effect appears, it compiles once and is cached

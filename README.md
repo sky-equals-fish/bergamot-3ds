@@ -43,7 +43,7 @@ AltStore or SideStore. Then import games from the app, or drop them into
 **Files › On My iPhone › Bergamot 3DS › Games**.
 
 Supported files: `.3ds`, `.cci`, `.cxi`, `.3dsx`, and decrypted `.cia`. Saves
-are kept automatically. You'll need your own games; none are included.
+are kept automatically.
 
 ### Settings
 
@@ -66,10 +66,6 @@ The emulation itself is [Azahar](https://github.com/azahar-emu/azahar): the
 ARM11 CPU, the 3DS operating system services, audio, and the graphics pipeline.
 We couldn't have built this without it, and the credit for running your games
 belongs to the people who work on it.
-
-This repo isn't a GitHub fork. It pins one Azahar commit and applies five small
-patches on top. Legally, the core you build is a modified Azahar under the same
-GPL-3.0-or-later license.
 
 Our patches add the Mac/iOS-specific parts: frame handoff into Metal, a build
 with every JIT removed, shader-cache preparation, and a fix for half-second
