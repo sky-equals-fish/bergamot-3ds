@@ -207,10 +207,67 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
 - (void)setSelected:(BOOL)s { [super setSelected:s]; [self refreshState]; }
 @end
 
+// Pixel-art segmented selector drawn from the Aseprite "segment" asset (normal/selected/pressed),
+// replacing the stock UISegmentedControl so the library matches the rest of the kit.
+@interface BGSegmentControl : UIControl
+@property(nonatomic) NSInteger selectedIndex;
+- (instancetype)initWithTitles:(NSArray<NSString*>*)titles accessibilityNames:(NSArray<NSString*>*)names;
+@end
+@implementation BGSegmentControl {
+    NSArray<UIButton*>* _cells;
+}
+- (instancetype)initWithTitles:(NSArray<NSString*>*)titles accessibilityNames:(NSArray<NSString*>*)names {
+    if ((self = [super initWithFrame:CGRectZero])) {
+        NSMutableArray* cells = [NSMutableArray new];
+        for (NSUInteger i = 0; i < titles.count; ++i) {
+            UIButton* b = [UIButton buttonWithType:UIButtonTypeCustom]; b.tag = (NSInteger)i; BGNearest(b);
+            BGPixelLabel* label = [BGPixelLabel new]; label.text = titles[i]; label.font = [UIFont systemFontOfSize:16];
+            label.userInteractionEnabled = NO; label.tag = 1000; [b addSubview:label];
+            b.accessibilityLabel = names[i];
+            [b addTarget:self action:@selector(tapped:) forControlEvents:UIControlEventTouchUpInside];
+            [self addSubview:b]; [cells addObject:b];
+        }
+        _cells = cells; [self refresh];
+        self.isAccessibilityElement = NO;
+    }
+    return self;
+}
+- (CGSize)intrinsicContentSize { return CGSizeMake(UIViewNoIntrinsicMetric, 40); }
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    const CGFloat gap = 6, w = (self.bounds.size.width - gap * (_cells.count - 1)) / _cells.count;
+    for (UIButton* b in _cells) {
+        b.frame = CGRectMake(b.tag * (w + gap), 0, w, self.bounds.size.height);
+        UIView* label = [b viewWithTag:1000];
+        const CGFloat lw = [(UILabel*)label text].length * 12 + 2;
+        label.frame = CGRectMake((w - lw) / 2, (self.bounds.size.height - 20) / 2 - 2, lw, 20);
+    }
+}
+- (void)setSelectedIndex:(NSInteger)i { _selectedIndex = i; [self refresh]; }
+- (void)refresh {
+    for (UIButton* b in _cells) {
+        const BOOL on = b.tag == _selectedIndex;
+        // 7 px caps keep the chamfers crisp; the face stretches with nearest sampling.
+        UIImage* (^cell)(NSInteger) = ^UIImage*(NSInteger frame) {
+            return [BGAsset(@"segment", frame) resizableImageWithCapInsets:UIEdgeInsetsMake(7, 7, 7, 7) resizingMode:UIImageResizingModeStretch];
+        };
+        [b setBackgroundImage:cell(on ? 1 : 0) forState:UIControlStateNormal];
+        [b setBackgroundImage:cell(2) forState:UIControlStateHighlighted];
+        ((UILabel*)[b viewWithTag:1000]).textColor = on ? BGInk() : [BGInk() colorWithAlphaComponent:.7];
+        b.accessibilityTraits = UIAccessibilityTraitButton | (on ? UIAccessibilityTraitSelected : 0);
+        [[b viewWithTag:1000] setNeedsDisplay];
+    }
+}
+- (void)tapped:(UIButton*)b {
+    if (b.tag == _selectedIndex) return;
+    self.selectedIndex = b.tag; [self sendActionsForControlEvents:UIControlEventValueChanged];
+}
+@end
+
 @interface BGGamesController : UIViewController <UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UIDocumentPickerDelegate, UITextFieldDelegate>
 @end
 @implementation BGGamesController {
-    UICollectionView* _grid; NSArray<NSURL*>* _games; NSArray<NSURL*>* _shown; UILabel* _message; UISegmentedControl* _scale;
+    UICollectionView* _grid; NSArray<NSURL*>* _games; NSArray<NSURL*>* _shown; UILabel* _message; BGSegmentControl* _scale;
     UITextField* _search; BOOL _pickingUpdate; NSCache<NSString*, NSDictionary*>* _art;
 }
 - (UIStatusBarStyle)preferredStatusBarStyle { return UIStatusBarStyleLightContent; }
@@ -228,14 +285,14 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     UIView* rule = [UIView new]; rule.backgroundColor = BGAccent(); [rule.heightAnchor constraintEqualToConstant:2].active = YES;
     UIStackView* buttons = [[UIStackView alloc] initWithArrangedSubviews:@[BGPanelButton(@"IMPORT", self, @selector(importGame)), BGPanelButton(@"UPDATE", self, @selector(importUpdate))]];
     buttons.spacing = 10; buttons.distribution = UIStackViewDistributionFillEqually;
-    _scale = [[UISegmentedControl alloc] initWithItems:@[@"1×", @"2×", @"3×", @"4×"]];
-    _scale.selectedSegmentIndex = BGPlayerScale() - 1; _scale.selectedSegmentTintColor = BGAccent();
-    [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGInk()} forState:UIControlStateNormal];
-    [_scale setTitleTextAttributes:@{NSForegroundColorAttributeName: BGColor(@"141B25")} forState:UIControlStateSelected];
+    _scale = [[BGSegmentControl alloc] initWithTitles:@[@"1X", @"2X", @"3X", @"4X"]
+                                    accessibilityNames:@[@"Native upscaling", @"2× upscaling", @"3× upscaling", @"4× upscaling"]];
+    _scale.selectedIndex = BGPlayerScale() - 1;
     [_scale addTarget:self action:@selector(scaleChanged) forControlEvents:UIControlEventValueChanged];
     BGPixelLabel* scaleLabel = [BGPixelLabel new]; scaleLabel.text = @"UPSCALING"; scaleLabel.font = [UIFont systemFontOfSize:12]; scaleLabel.textColor = BGInk();
     [scaleLabel.widthAnchor constraintEqualToConstant:112].active = YES;
     UIStackView* scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[scaleLabel, _scale]]; scaleRow.spacing = 12; scaleRow.alignment = UIStackViewAlignmentCenter;
+    [_scale.heightAnchor constraintEqualToConstant:40].active = YES;
     UIImageView* searchFrame = [[UIImageView alloc] initWithImage:BGSurface(@"field", 0)]; BGNearest(searchFrame); searchFrame.userInteractionEnabled = YES;
     [searchFrame.heightAnchor constraintEqualToConstant:44].active = YES;
     _search = [UITextField new]; _search.font = [UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightRegular]; _search.textColor = BGInk();
@@ -326,7 +383,7 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     return tile;
 }
 - (void)collectionView:(UICollectionView*)c didSelectItemAtIndexPath:(NSIndexPath*)ip { [c deselectItemAtIndexPath:ip animated:YES]; [self play:_shown[(NSUInteger)ip.item]]; }
-- (void)scaleChanged { [NSUserDefaults.standardUserDefaults setInteger:_scale.selectedSegmentIndex + 1 forKey:@"BGPlayerScale"]; }
+- (void)scaleChanged { [NSUserDefaults.standardUserDefaults setInteger:_scale.selectedIndex + 1 forKey:@"BGPlayerScale"]; }
 // Scripted testing: launch with --bg-play "<file name in Games>" to open it directly.
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];

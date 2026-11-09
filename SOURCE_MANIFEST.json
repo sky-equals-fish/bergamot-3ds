@@ -71,6 +71,9 @@
     "ios/PixelArt/exports/default-panel-0.png": "55455e6bd1f36d4df73be43e11b4a2e752a902009703d19b19024f96501cf20b",
     "ios/PixelArt/exports/default-panel-1.png": "e8311dec521d985071f5c1cdd2bd3e5bcaa11b9bb0d7eab94de3f3de3fc6d848",
     "ios/PixelArt/exports/default-panel-2.png": "955a28670eaf9ec352c92ea7888cf4a5e54e7b6d519d680c68a0e01459294f9d",
+    "ios/PixelArt/exports/default-segment-0.png": "65e2cb8c225717fb6a2e96402b3cab7e7640135a2970a547937e263b478ba03f",
+    "ios/PixelArt/exports/default-segment-1.png": "030613f67ce164f5390fb5d984d1d9fd88cfb59bbbe6e145723d21ec81044ac0",
+    "ios/PixelArt/exports/default-segment-2.png": "3fb5478511330fc59c05c3368ff8407198a3c8ca4ac7510583f05179d495fbb3",
     "ios/PixelArt/exports/default-skin-bezel-0.png": "177c054883c51827205cc06c6810748d1c0c5ab41f58eb9322448c71d1709ed3",
     "ios/PixelArt/exports/default-skin-phone-details-0.png": "d9acb55fdb2cd4e9283327b7645e44dc5927c621277cdef0e6dcdfe16268630a",
     "ios/game_art.hpp": "76ced602294924799816b98034a84e05693d9d01879eb5eeb29f3c493c86d1c9",
@@ -80,7 +83,7 @@
     "patches/0008-azahar-libretro-async-shaders.patch": "ace6a2bb6f91c1185daaa0cab1fcb925a62def1d0053832e34d1fadfbd3812c8",
     "patches/0009-azahar-libretro-shader-preparation.patch": "f70c729c03d4f893de6b8cd5995f5f39c4839f6dc83f0d0a5762860e07614422",
     "patches/0010-azahar-batch-cro-cache-invalidation.patch": "7393d9a6d570e834e8830932daaf4ef2cc9e35773a7211d9b0d65a514a9d3572",
-    "player/CMakeLists.txt": "5304d8108bac8f0e23085e87a7da1e2ed4b29b02901d3e1d3ae054e99e141712",
+    "player/CMakeLists.txt": "76de1cebf90109aaed4f19443f39b1886050a7f784c31ddd2c7b4b7b7ebe6d74",
     "player/Icons/AppIcon60x60@2x.png": "c04fa9dce70d96e344405fd7570a527a3262f3950be1d6631ccba7962e2ad0ee",
     "player/Icons/AppIcon60x60@3x.png": "c6858b8a041d87e0db58519146dc2a9977cbb4caf1c10ad642781a32933e1340",
     "player/Icons/AppIcon76x76@2x~ipad.png": "ce4a0b3eec203f28f91772131b0925292cc2e892509fb8f82e26501f459350c6",
@@ -89,7 +92,7 @@
     "player/Icons/fuitlet.png": "bf78db64d1156febbf293f7ddf374ab9cd7544fc9e0454af82a4e5ca368d8ca9",
     "player/MacInfo.plist": "cb13cfa88371e749d1cb9fb71668039f6026a440552a9a83ddbc93dffe1aee70",
     "player/iOSInfo.plist": "00f53389b8aa62104acb33dc821e09d7169f7cfdfbe0e3db9dad6022c02fb443",
-    "player/ios_player.mm": "7ab9b6a0688f8e7a0d7b5abc26d1b3ecf8d02d29f0801268541d2749b6d03493",
+    "player/ios_player.mm": "c8ae78602178a7dd4b7f74a91280c248897afb82d426e2eb55d2dfe104a6b88c",
     "player/mac_player.mm": "e06b7e20c69a46900257f5cc6c82323505500bbc469b9e71a527d19d1f865428",
     "player/player_session.h": "62024fbdbd4140bb22658876a32a0e2cc11170d5cdbfb8894f51470a55550829",
     "requirements-build.txt": "4ac18b0adf907f30a6fc02a0212d67f82e4ef5157a861481ed34b05135a399cc",
@@ -116,8 +119,8 @@
     "tools/bootstrap.py": "c85147eb97b824a0b4949d7631e82cff3631f204e01ceccccb86fa44ea470546",
     "tools/build_core.py": "521dc66f2154cff0fd691094bb59af5bf4f4095f89100324eeea0b31e67bd993",
     "tools/make_probe.py": "b4abbf01b203c8c4defcd8a11e84198104119acebb319d11e38aa7203079c3d5",
-    "tools/make_xcode_kit.py": "8db67b052b7f575f60ae279db085e7250820e28dad85c121934c9466b4023aa2",
-    "tools/package_player.py": "9009dc96e0cfbb1efadcc3166dd5ddb7778bc646a43a5be1dab83907c180e934",
-    "tools/prepare_source_release.py": "5057012c036ce9f6ebed703760d6d63efdbf5f40271788eaeb580d8fc1ed8cbc"
+    "tools/make_xcode_kit.py": "939771287b826829a79381a714b0a9e965dc867ed38adab127f65a77e7dc4cde",
+    "tools/package_player.py": "12595acaba8a07f31a2dd7aa26de3df3efdb4796deaae64b7132616bf8864aec",
+    "tools/prepare_source_release.py": "5deefbf6978cf0930d5f134afb1b3b54dc29fc98b4c717d5d83c63f3ecd1d4a8"
   }
 }

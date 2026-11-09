@@ -75,7 +75,7 @@ def package_source(version, out):
     keep_top = {"CMakeLists.txt", "LICENSE", "NOTICE.txt", "THIRD_PARTY_NOTICES.txt", "dependencies.json", "requirements-build.txt"}
     tools = {"bootstrap.py", "build_core.py", "make_probe.py", "package_player.py", "make_xcode_kit.py"}
     art = ("default-control-", "default-dpad-", "default-circle-", "default-cstick-", "default-skin-bezel-", "default-skin-phone-details-", "default-background-",
-           "default-library-row-", "default-field-", "default-panel-", "default-font-", "default-icon-3ds-")
+           "default-library-row-", "default-field-", "default-panel-", "default-font-", "default-icon-3ds-", "default-segment-")
     def wanted(rel):
         p = rel.parts
         if len(p) == 1: return rel.name in keep_top

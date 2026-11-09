@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENV = dict(os.environ, DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer")
 ART = ("control-a", "control-b", "control-x", "control-y", "control-l", "control-r", "control-zl", "control-zr",
        "control-home", "control-select", "control-start", "dpad", "circle", "cstick", "skin-bezel",
-       "skin-phone-details", "background", "library-row", "field", "panel", "font", "icon-3ds")
+       "skin-phone-details", "background", "library-row", "field", "panel", "font", "icon-3ds", "segment")
 FRAMEWORKS = ["UIKit", "GameController", "AVFoundation", "UniformTypeIdentifiers", "Metal", "QuartzCore",
               "IOSurface", "CoreGraphics", "Foundation"]
 
