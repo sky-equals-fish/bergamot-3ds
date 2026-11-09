@@ -8,11 +8,13 @@
 <h1 align="center">Bergamot 3DS core</h1>
 
 <p align="center">
-  <strong>A no-JIT Nintendo 3DS runtime for Apple Silicon Mac, iPhone and iOS Simulator, built on Azahar, usable from any app.</strong>
+  <strong>A no-JIT Nintendo 3DS core for Apple Silicon Mac and iPhone, built on Azahar, with a ready-to-build app and the Azahar patches that make it work.</strong>
 </p>
 
 <p align="center">
+  <a href="docs/PLAYER.md">The app</a> ·
   <a href="docs/THREEDS_SOURCE_PACKAGE.md">Integration guide</a> ·
+  <a href="docs/AZAHAR_PATCHES.md">Azahar patches</a> ·
   <a href="#built-on-azahar">Built on Azahar</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="docs/RELEASE_READINESS.md">What is verified</a> ·
@@ -21,11 +23,15 @@
 
 ---
 
-This repository is the 3DS core from [Bergamot](#about-bergamot), split out so
-other projects can use it. It contains **source**, not a prebuilt library: a
-C++20 / Objective-C++ runtime, an optional Metal presenter, a UI-free CMake
-entry point, pinned dependency manifests, the two Bergamot patches to Azahar,
-build tools, an original homebrew smoke test and the notices that go with it.
+This repository is the 3DS side of [Bergamot](#about-bergamot), split out so
+other people can build it, play with it and improve it. It contains source, not
+prebuilt binaries, in three parts:
+
+| Part | What it is | Start here |
+| --- | --- | --- |
+| **Bergamot 3DS app** | A small Mac and iPhone/iPad app: open a game and play, saves kept automatically, settings for 1×–4× resolution, screen layout, GPU handoff and shaders | [docs/PLAYER.md](docs/PLAYER.md) |
+| **The core** | `ctr::Runtime` behind the CMake targets `Bergamot::ThreeDS` and `Bergamot::ThreeDSMetal`, for embedding 3DS emulation in your own app | [docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURCE_PACKAGE.md) |
+| **The Azahar add-on** | Five patches to pinned Azahar: Metal handoff and host bridge, compile-time no-JIT, async shaders, shader preparation, and a fix for freezes when games load code modules | [docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md) |
 
 What makes it different from running Azahar on a Mac:
 
@@ -56,16 +62,21 @@ runs because of their work.
 
 Is it a fork? Not in the GitHub sense: this repository does not contain Azahar's
 source tree. [`dependencies.json`](dependencies.json) pins one upstream commit,
-`tools/bootstrap.py` fetches it and applies the two patches in
+`tools/bootstrap.py` fetches it and applies the Bergamot patches in
 [`patches/`](patches). In the copyright sense, yes: the built core is a modified
 Azahar, a derivative work licensed like upstream under **GPL-3.0-or-later**, and
 everything Bergamot adds is GPL-3.0-or-later as well.
 
 | Patch | What it does |
 | --- | --- |
-| `0001-libretro-frame-synchronization.patch` | Flushes the Vulkan worker before handing a frame to the host, preserves the scheduler's wait and signal semaphores on the libretro submission path, declares Metal object export for the output image and the command queue, and adds a small C bridge for title metadata, CIA installation and real performance counters |
-| `0007-azahar-no-jit-build.patch` | Adds `BERGAMOT_NO_JIT`: removes Dynarmic, Oaknut, Xbyak and the PICA shader JIT sources and link dependencies, forces CPU and shader JIT settings off on every platform, and disables the built-in key blob |
+| `0001-libretro-frame-synchronization` | Semaphore-correct Vulkan frame handoff, Metal export of the output image and command queue, and a small C bridge for title metadata, CIA installs and performance counters |
+| `0007-azahar-no-jit-build` | `BERGAMOT_NO_JIT`: removes Dynarmic, Oaknut, Xbyak and the PICA shader JIT from the build and forces JIT off on every platform |
+| `0008-azahar-libretro-async-shaders` | Exposes Azahar's existing async pipeline compilation to libretro hosts (off by default) |
+| `0009-azahar-libretro-shader-preparation` | Shader-cache progress reporting and a wait-until-built call, so play starts with every cached shader ready |
+| `0010-azahar-batch-cro-cache-invalidation` | Batches instruction-cache invalidation while a game loads a code module, instead of scanning the whole decoded-block cache once per relocation |
 
+Details, and how to apply them to Azahar on its own, are in
+[docs/AZAHAR_PATCHES.md](docs/AZAHAR_PATCHES.md).
 The patches are Bergamot's responsibility and have not been submitted upstream.
 Graphics translation uses [MoltenVK](https://github.com/KhronosGroup/MoltenVK)
 (Apache-2.0). See [NOTICE.txt](NOTICE.txt) and
@@ -101,6 +112,22 @@ python tools/build_core.py ios-simulator
 then configure `systems/3ds` with the matching `CTR_PLATFORM`, SDK and
 toolchain as shown in the [integration guide](docs/THREEDS_SOURCE_PACKAGE.md).
 Device and Simulator dylibs are both arm64 and are **not** interchangeable.
+
+## Build the app
+
+With the core built, the Mac app is one more CMake project:
+
+```sh
+cmake -S player -B build/player-macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DCTR_PLATFORM=macos
+cmake --build build/player-macos
+open "build/player-macos/Bergamot 3DS.app"
+```
+
+Open a game with ⌘O or drag it onto the window. Settings (⌘,) chooses the
+internal resolution from 1× native up to 4×, the screen layout, GPU handoff mode
+and shader behaviour; native is the default. The iPhone build, controls, and
+`tools/package_player.py` (Mac zip, unsigned IPA, source archive) are covered in
+[docs/PLAYER.md](docs/PLAYER.md).
 
 ## Link it into your app
 
@@ -181,7 +208,9 @@ limitations, is in [`docs/`](docs). Start with
 | Independent Mac host runs the original ARM11 probe with the executable-memory denial interposer active | Renewed physical-device gameplay validation after the compile-time JIT exclusion |
 | Serialized, deferred and queue-ordered presentation produce byte-identical 4× captures under Metal API validation | Matched warm-cache gameplay benchmarks at 3× and 4×; sustained thermal and audio behaviour |
 | Lifecycle tests: ownership, malformed titles, callback fault injection, sequential sessions, guest clock | Universal title compatibility; the probe is a smoke test, not an ARM conformance suite |
-| Alpha Sapphire plus update boots on iPhone 15 Pro at 4× near 100% guest speed in all modes | Smooth sustained 4× gameplay; stalls remain |
+| Alpha Sapphire plus update boots on iPhone 15 Pro at 4× near 100% guest speed in all modes | Smooth sustained 4× gameplay on iPhone |
+| Mac host, 3-minute intro runs at 4×: with patch 0010 no gameplay frame over 100 ms (worst 81 ms) in three runs, versus a 0.7–0.9 s freeze in 3 of 5 runs before | The patched core (0008–0010) on a physical iPhone |
+| Mac host: 100% guest speed after removing vsync-blocking presents (a 48 Hz ProMotion rate had held it at 80%) | Long sessions and more titles |
 
 [RELEASE_READINESS.md](docs/RELEASE_READINESS.md) keeps the evidence boundaries
 current. Mac and Simulator results do not establish iPhone performance.

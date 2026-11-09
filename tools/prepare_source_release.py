@@ -12,12 +12,17 @@ import tarfile
 ROOT = Path(__file__).resolve().parents[1]
 COMMON_FILES = {'CMakeLists.txt', 'LICENSE', 'NOTICE.txt', 'THIRD_PARTY_NOTICES.txt',
                 'dependencies.json', 'requirements-build.txt', '.gitignore'}
-COMMON_TOOLS = {'bootstrap.py', 'build_core.py', 'make_probe.py', 'prepare_source_release.py'}
+COMMON_TOOLS = {'bootstrap.py', 'build_core.py', 'make_probe.py', 'prepare_source_release.py', 'package_player.py'}
 APP_TOOLS = {'build_app.py', 'build_device.py', 'build_simulator.py', 'build_handheld_cores.py',
              'make_handheld_probes.py', 'test_handheld_runtimes.py'}
-DOCS = {'RELEASE_READINESS.md', 'USER_FILES.md', 'THREEDS_SOURCE_PACKAGE.md', 'RUNTIME_AUDIT.md', 'PRESENTATION_SYNC_EXPERIMENT.md'}
+DOCS = {'RELEASE_READINESS.md', 'USER_FILES.md', 'THREEDS_SOURCE_PACKAGE.md', 'RUNTIME_AUDIT.md', 'PRESENTATION_SYNC_EXPERIMENT.md',
+        'PLAYER.md', 'AZAHAR_PATCHES.md'}
 DENIED = {'.pem', '.p12', '.mobileprovision', '.key', '.keys', '.cia', '.3ds', '.3dsx', '.nds',
           '.gba', '.sav', '.srm', '.dylib', '.a', '.ipa', '.bin'}
+AZAHAR_PATCHES = {'0001-libretro-frame-synchronization.patch', '0007-azahar-no-jit-build.patch',
+                  '0008-azahar-libretro-async-shaders.patch', '0009-azahar-libretro-shader-preparation.patch',
+                  '0010-azahar-batch-cro-cache-invalidation.patch'}
+PLAYER_ART = re.compile(r'^default-(control-(a|b|x|y|l|r|zl|zr|home|select|start)|dpad|circle|cstick|skin-bezel|skin-phone-details|background)-[0-9]+\.png$')
 RETIRED = re.compile(r'-(icon-(gc|wii|wiiu|switch|ps1|ps2|psp)|control-(plus|minus|cross|circle|square|triangle|z|l1|l2|l3|r1|r2|r3))-')
 
 def selected(relative, component):
@@ -27,7 +32,11 @@ def selected(relative, component):
     if len(parts) == 1: return relative.name in COMMON_FILES or (component == 'app' and relative.name == 'handheld-dependencies.json')
     if parts[0] == 'src': return len(parts) == 2 or (component == 'app' and parts[1] == 'handheld')
     if parts[0] == 'tools': return relative.name in COMMON_TOOLS | (APP_TOOLS if component == 'app' else set())
-    if parts[0] == 'patches': return relative.name in {'0001-libretro-frame-synchronization.patch', '0007-azahar-no-jit-build.patch'}
+    if parts[0] == 'patches': return relative.name in AZAHAR_PATCHES
+    if parts[0] == 'player': return True   # Bergamot 3DS app (Mac + iOS) around the core
+    if component == '3ds' and parts[0] == 'ios':
+        # Only what the player reuses: the 3DS touch controls and their default-palette art.
+        return relative.as_posix() == 'ios/pixel_controls.h' or (len(parts) == 4 and parts[2] == 'exports' and PLAYER_ART.match(relative.name) is not None)
     if parts[0] == 'docs':
         if len(parts) == 3 and parts[1] == 'screenshots':
             return component == 'app' and relative.name in {'README.md', 'home.png', '3ds-controls.png', 'ds-controls.png', 'gba-controls.png'}

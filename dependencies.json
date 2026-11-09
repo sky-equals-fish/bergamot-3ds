@@ -4,7 +4,10 @@
     "commit": "6b4e7f2e694514fdf2f72dc20368609b7cd4912e",
     "patch": "patches/0001-libretro-frame-synchronization.patch",
     "additional_patches": [
-      "patches/0007-azahar-no-jit-build.patch"
+      "patches/0007-azahar-no-jit-build.patch",
+      "patches/0008-azahar-libretro-async-shaders.patch",
+      "patches/0009-azahar-libretro-shader-preparation.patch",
+      "patches/0010-azahar-batch-cro-cache-invalidation.patch"
     ]
   },
   "nxnative_research": {

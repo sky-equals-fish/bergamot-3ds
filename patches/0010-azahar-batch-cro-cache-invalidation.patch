@@ -1,0 +1,144 @@
+diff -ru a/src/core/core.h b/src/core/core.h
+--- a/src/core/core.h	2026-11-08 19:48:01
++++ b/src/core/core.h	2026-11-08 19:48:47
+@@ -6,6 +6,7 @@
+ 
+ #include <atomic>
+ #include <chrono>
++#include <algorithm>
+ #include <memory>
+ #include <mutex>
+ #include <string>
+@@ -245,12 +246,65 @@
+     }
+ 
+     void InvalidateCacheRange(u32 start_address, std::size_t length) {
++        if (cache_batch_depth > 0) {
++            // Bergamot: defer to the end of the batch, one pass per run of touched pages.
++            if (length == 0) {
++                return;
++            }
++            const u64 end = static_cast<u64>(start_address) + length - 1;
++            for (u64 page = start_address >> 12; page <= (end >> 12); ++page) {
++                cache_batch_pages.push_back(static_cast<u32>(page));
++            }
++            return;
++        }
+         for (const auto& cpu : cpu_cores) {
+             cpu->InvalidateCacheRange(start_address, length);
+         }
+     }
+ 
+     /**
++     * Bergamot: groups instruction-cache invalidations made while no guest code can run, such
++     * as the thousands of 4-byte relocation patches applied when a CRO module is linked. Each
++     * InvalidateCacheRange call otherwise walks every decoded block on every core; a batch
++     * collapses them into one walk per contiguous run of touched 4 KiB pages when it closes.
++     */
++    class CacheInvalidationBatch {
++    public:
++        explicit CacheInvalidationBatch(System& system_) : system{system_} {
++            ++system.cache_batch_depth;
++        }
++        ~CacheInvalidationBatch() {
++            if (--system.cache_batch_depth == 0) {
++                system.FlushCacheInvalidationBatch();
++            }
++        }
++        CacheInvalidationBatch(const CacheInvalidationBatch&) = delete;
++        CacheInvalidationBatch& operator=(const CacheInvalidationBatch&) = delete;
++
++    private:
++        System& system;
++    };
++
++    void FlushCacheInvalidationBatch() {
++        auto& pages = cache_batch_pages;
++        std::sort(pages.begin(), pages.end());
++        pages.erase(std::unique(pages.begin(), pages.end()), pages.end());
++        for (std::size_t i = 0; i < pages.size();) {
++            std::size_t j = i + 1;
++            while (j < pages.size() && pages[j] == pages[j - 1] + 1) {
++                ++j;
++            }
++            const u32 start = pages[i] << 12;
++            const std::size_t length = static_cast<std::size_t>(j - i) << 12;
++            for (const auto& cpu : cpu_cores) {
++                cpu->InvalidateCacheRange(start, length);
++            }
++            i = j;
++        }
++        pages.clear();
++    }
++
++    /**
+      * Gets a reference to the emulated DSP.
+      * @returns A reference to the emulated DSP.
+      */
+@@ -491,6 +545,9 @@
+ 
+     /// ARM11 CPU core
+     std::vector<std::shared_ptr<ARM_Interface>> cpu_cores;
++    /// Bergamot: open CacheInvalidationBatch scopes and the pages they touched.
++    u32 cache_batch_depth = 0;
++    std::vector<u32> cache_batch_pages;
+     ARM_Interface* running_core = nullptr;
+ 
+     /// DSP core
+diff -ru a/src/core/hle/service/ldr_ro/ldr_ro.cpp b/src/core/hle/service/ldr_ro/ldr_ro.cpp
+--- a/src/core/hle/service/ldr_ro/ldr_ro.cpp	2026-11-08 19:48:01
++++ b/src/core/hle/service/ldr_ro/ldr_ro.cpp	2026-11-08 19:48:47
+@@ -61,6 +61,8 @@
+ 
+ void RO::Initialize(Kernel::HLERequestContext& ctx) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr crs_buffer_ptr = rp.Pop<u32>();
+     u32 crs_size = rp.Pop<u32>();
+     VAddr crs_address = rp.Pop<u32>();
+@@ -168,6 +170,8 @@
+ 
+ void RO::LoadCRO(Kernel::HLERequestContext& ctx, bool link_on_load_bug_fix) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr cro_buffer_ptr = rp.Pop<u32>();
+     VAddr cro_address = rp.Pop<u32>();
+     u32 cro_size = rp.Pop<u32>();
+@@ -335,6 +339,8 @@
+ 
+ void RO::UnloadCRO(Kernel::HLERequestContext& ctx) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr cro_address = rp.Pop<u32>();
+     u32 zero = rp.Pop<u32>();
+     VAddr cro_buffer_ptr = rp.Pop<u32>();
+@@ -405,6 +411,8 @@
+ 
+ void RO::LinkCRO(Kernel::HLERequestContext& ctx) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr cro_address = rp.Pop<u32>();
+     auto process = rp.PopObject<Kernel::Process>();
+ 
+@@ -445,6 +453,8 @@
+ 
+ void RO::UnlinkCRO(Kernel::HLERequestContext& ctx) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr cro_address = rp.Pop<u32>();
+     auto process = rp.PopObject<Kernel::Process>();
+ 
+@@ -485,6 +495,8 @@
+ 
+ void RO::Shutdown(Kernel::HLERequestContext& ctx) {
+     IPC::RequestParser rp(ctx);
++    // Bergamot: one instruction-cache pass per touched page run, not one per relocation.
++    Core::System::CacheInvalidationBatch invalidation_batch{system};
+     VAddr crs_buffer_ptr = rp.Pop<u32>();
+     auto process = rp.PopObject<Kernel::Process>();
+ 

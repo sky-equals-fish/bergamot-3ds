@@ -21,6 +21,8 @@ namespace ctr {
 class Runtime final {
 public:
     using FrameSink = std::function<void(const void*, unsigned, unsigned, std::size_t)>;
+    // stage: 0 prepare, 1 preload, 2 decompile, 3 build, 4 complete (VideoCore::LoadCallbackStage).
+    using ShaderProgress = std::function<void(int stage, std::size_t current, std::size_t total)>;
     using AudioSink = std::function<void(const std::int16_t*, std::size_t)>;
     using HandoffSync = VulkanBackend::HandoffSync;
     explicit Runtime(const std::filesystem::path& data_root, bool vulkan = false, unsigned scale = 1);
@@ -28,6 +30,11 @@ public:
     Runtime(const Runtime&) = delete;
     Runtime& operator=(const Runtime&) = delete;
     void load(const std::filesystem::path& game);
+    // Override a core option (e.g. "citra_async_shader_compilation" = "enabled") before load().
+    void set_option(const std::string& key, const std::string& value) {
+        if (attempted_load_) throw std::logic_error("Set core options before loading a title");
+        options_[key] = value;
+    }
     ctr_content_info inspect(const std::filesystem::path& file) const;
     std::filesystem::path install_package(const std::filesystem::path& file);
     ctr_perf_info performance() const;
@@ -39,6 +46,11 @@ public:
     void set_c_stick(std::int16_t x, std::int16_t y) { cstick_x_ = x; cstick_y_ = y; }
     void set_frame_sink(FrameSink sink) { frame_sink_ = std::move(sink); }
     void set_audio_sink(AudioSink sink) { audio_sink_ = std::move(sink); }
+    // Called on the loading thread while load() reads this title's shader cache.
+    void set_shader_progress(ShaderProgress progress) { shader_progress_ = std::move(progress); }
+    // After load(): blocks until every cached shader and pipeline is built, so play starts
+    // without compiling anything the cache already knows. Hosts show "Preparing shaders".
+    void wait_for_shader_cache();
     void set_gpu_presenter(VulkanBackend::Presenter presenter) {
         if (vulkan_) vulkan_->set_handoff_sync(HandoffSync::Serialized);
         gpu_presenter_ = std::move(presenter); gpu_async_presenter_ = {};
@@ -82,6 +94,7 @@ private:
     std::atomic_bool touching_{false}, probe_seen_{false};
     FrameSink frame_sink_;
     AudioSink audio_sink_;
+    ShaderProgress shader_progress_;
     VulkanBackend::Presenter gpu_presenter_;
     VulkanBackend::AsyncPresenter gpu_async_presenter_;
     std::unique_ptr<VulkanBackend> vulkan_;

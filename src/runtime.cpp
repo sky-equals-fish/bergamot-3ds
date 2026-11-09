@@ -54,6 +54,10 @@ void Runtime::load(const std::filesystem::path& game) {
     const auto path = std::filesystem::absolute(game).string();
     const retro_game_info info{path.c_str(), nullptr, 0, nullptr};
     attempted_load_ = true;
+    ctr_set_shader_progress(shader_progress_ ? [](void* context, int stage, std::size_t current, std::size_t total) {
+        try { static_cast<Runtime*>(context)->shader_progress_(stage, current, total); }
+        catch (...) { static_cast<Runtime*>(context)->record_callback_error(); }
+    } : nullptr, this);
     shutdown_ = false;
     frames_ = 0;
     probe_seen_ = false;
@@ -69,9 +73,17 @@ void Runtime::load(const std::filesystem::path& game) {
             rethrow_callback_error();
         }
     } catch (...) {
+        ctr_set_shader_progress(nullptr, nullptr);
         unload();
         throw;
     }
+    ctr_set_shader_progress(nullptr, nullptr);
+}
+void Runtime::wait_for_shader_cache() {
+    if (!loaded_) throw std::logic_error("No title loaded");
+    if (const int status = ctr_wait_shader_cache())
+        throw std::runtime_error("Shader preparation failed (" + std::to_string(status) + ")");
+    rethrow_callback_error();
 }
 ctr_content_info Runtime::inspect(const std::filesystem::path& file) const {
     ctr_content_info info{};

@@ -1,0 +1,164 @@
+diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
+index 54df4dc..3335b50 100644
+--- a/src/citra_libretro/citra_libretro.cpp
++++ b/src/citra_libretro/citra_libretro.cpp
+@@ -30,6 +30,7 @@
+ 
+ #include "citra_libretro/citra_libretro.h"
+ #include "citra_libretro/core_settings.h"
++#include "citra_libretro/ctr_bridge.h"
+ #include "citra_libretro/environment.h"
+ #include "citra_libretro/input/input_factory.h"
+ 
+@@ -419,8 +420,12 @@ static bool do_load_game() {
+     Core::System::GetInstance().GPU().ApplyPerProgramSettings(program_id);
+ 
+     if (Settings::values.use_disk_shader_cache) {
++        // Bergamot: report cache progress to the host (ctr_set_shader_progress).
+         Core::System::GetInstance().GPU().Renderer().Rasterizer()->LoadDefaultDiskResources(
+-            false, nullptr);
++            false, [](VideoCore::LoadCallbackStage stage, std::size_t current, std::size_t total,
++                      const std::string&) {
++                LibRetro::ReportShaderProgress(static_cast<int>(stage), current, total);
++            });
+     }
+ 
+     setup_memory_maps();
+diff --git a/src/citra_libretro/ctr_bridge.cpp b/src/citra_libretro/ctr_bridge.cpp
+index bd131e9..6f756f9 100644
+--- a/src/citra_libretro/ctr_bridge.cpp
++++ b/src/citra_libretro/ctr_bridge.cpp
+@@ -9,6 +9,9 @@
+ #include "core/loader/loader.h"
+ #include "core/hle/kernel/kernel.h"
+ #include "core/hle/kernel/process.h"
++#include "video_core/gpu.h"
++#include "video_core/rasterizer_interface.h"
++#include "video_core/renderer_base.h"
+ #include "core/memory.h"
+ #include <cstring>
+ #include <filesystem>
+@@ -69,6 +72,28 @@ extern "C" int ctr_sample_performance(ctr_perf_info* info) {
+     return 0;
+ }
+ 
++namespace {
++ctr_shader_progress_fn shader_progress = nullptr;
++void* shader_progress_context = nullptr;
++}
++namespace LibRetro {
++void ReportShaderProgress(int stage, size_t current, size_t total) {
++    if (shader_progress) shader_progress(shader_progress_context, stage, current, total);
++}
++}
++extern "C" void ctr_set_shader_progress(ctr_shader_progress_fn callback, void* context) {
++    shader_progress = callback;
++    shader_progress_context = context;
++}
++extern "C" int ctr_wait_shader_cache(void) {
++    auto& system = Core::System::GetInstance();
++    if (!system.IsPoweredOn()) return -4;
++    try {
++        system.GPU().Renderer().Rasterizer()->WaitDiskResources();
++        return 0;
++    } catch (...) { return -3; }
++}
++
+ extern "C" int ctr_read_guest_memory(uint64_t title_id, uint32_t address, void* output, size_t size) {
+     if (!output || !size || size > 4096 || uint64_t(address) + size > 0x100000000ULL) return -1;
+     auto& system = Core::System::GetInstance();
+diff --git a/src/citra_libretro/ctr_bridge.h b/src/citra_libretro/ctr_bridge.h
+index f594b31..c3dfabd 100644
+--- a/src/citra_libretro/ctr_bridge.h
++++ b/src/citra_libretro/ctr_bridge.h
+@@ -26,8 +26,20 @@ typedef struct ctr_perf_info {
+     double swap_seconds;
+ } ctr_perf_info;
+ int ctr_sample_performance(ctr_perf_info* info);
++// Shader cache preparation. The callback receives the loader's stage (VideoCore::LoadCallbackStage:
++// 0 prepare, 1 preload, 2 decompile, 3 build, 4 complete) with progress while retro_load_game
++// reads the disk cache. Set it before retro_load_game; pass NULL to clear.
++typedef void (*ctr_shader_progress_fn)(void* context, int stage, size_t current, size_t total);
++void ctr_set_shader_progress(ctr_shader_progress_fn callback, void* context);
++// After retro_load_game: blocks until every cached shader and pipeline has finished compiling,
++// so the first frames never wait on a compile. 0 success, -4 no running title.
++int ctr_wait_shader_cache(void);
+ // Read-only guest inspection, only between retro_run calls on the owner thread.
+ int ctr_read_guest_memory(uint64_t title_id, uint32_t address, void* output, size_t size);
+ #ifdef __cplusplus
+ }
++namespace LibRetro {
++// Forwards VideoCore disk-cache progress to the callback set by ctr_set_shader_progress.
++void ReportShaderProgress(int stage, size_t current, size_t total);
++}
+ #endif
+diff --git a/src/citra_libretro/libretro.osx.def b/src/citra_libretro/libretro.osx.def
+index f644bb4..d784624 100644
+--- a/src/citra_libretro/libretro.osx.def
++++ b/src/citra_libretro/libretro.osx.def
+@@ -29,3 +29,5 @@ _retro_unload_game
+ _retro_get_region
+ _retro_get_memory_data
+ _retro_get_memory_size
++_ctr_set_shader_progress
++_ctr_wait_shader_cache
+diff --git a/src/video_core/rasterizer_interface.h b/src/video_core/rasterizer_interface.h
+index 7846a8a..09f770c 100644
+--- a/src/video_core/rasterizer_interface.h
++++ b/src/video_core/rasterizer_interface.h
+@@ -83,6 +83,9 @@ public:
+ 
+     virtual void SwitchDiskResources([[maybe_unused]] u64 title_id) {}
+ 
++    /// Blocks until shaders and pipelines queued by LoadDefaultDiskResources are built.
++    virtual void WaitDiskResources() {}
++
+ #ifdef ENABLE_FREECAM
+     virtual void SetFreeCam([[maybe_unused]] const std::array<f32, 16>& matrix,
+                             [[maybe_unused]] bool skip_2d) {}
+diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.h b/src/video_core/renderer_vulkan/vk_pipeline_cache.h
+index 0efcdc5..698c759 100644
+--- a/src/video_core/renderer_vulkan/vk_pipeline_cache.h
++++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.h
+@@ -164,6 +164,14 @@ private:
+     vk::UniquePipelineCache driver_pipeline_cache;
+     vk::UniquePipelineLayout pipeline_layout;
+     std::size_t num_worker_threads;
++public:
++    /// Waits for every queued shader and pipeline compile, e.g. after loading the disk cache.
++    void WaitForWorkers() {
++        shader_workers.WaitForRequests();
++        pipeline_workers.WaitForRequests();
++    }
++
++private:
+     Common::ThreadWorker pipeline_workers;
+     Common::ThreadWorker shader_workers;
+     PipelineInfo current_info{};
+diff --git a/src/video_core/renderer_vulkan/vk_rasterizer.cpp b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+index 6b753b8..4d2b000 100644
+--- a/src/video_core/renderer_vulkan/vk_rasterizer.cpp
++++ b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+@@ -148,6 +148,10 @@ void RasterizerVulkan::TickFrame() {
+     res_cache.TickFrame();
+ }
+ 
++void RasterizerVulkan::WaitDiskResources() {
++    pipeline_cache.WaitForWorkers();
++}
++
+ void RasterizerVulkan::LoadDefaultDiskResources(
+     const std::atomic_bool& stop_loading, const VideoCore::DiskResourceLoadCallback& callback) {
+ 
+diff --git a/src/video_core/renderer_vulkan/vk_rasterizer.h b/src/video_core/renderer_vulkan/vk_rasterizer.h
+index 3c7ebb5..bec0b61 100644
+--- a/src/video_core/renderer_vulkan/vk_rasterizer.h
++++ b/src/video_core/renderer_vulkan/vk_rasterizer.h
+@@ -47,6 +47,7 @@ public:
+     void TickFrame();
+     void LoadDefaultDiskResources(const std::atomic_bool& stop_loading,
+                                   const VideoCore::DiskResourceLoadCallback& callback) override;
++    void WaitDiskResources() override;
+ 
+     void DrawTriangles() override;
+     void FlushAll() override;

@@ -1,0 +1,16 @@
+--- a/src/citra_libretro/core_settings.cpp	2026-11-08 18:56:59
++++ b/src/citra_libretro/core_settings.cpp	2026-11-08 18:56:59
+@@ -1004,6 +1004,13 @@
+         LibRetro::FetchVariable(config::graphics::use_disk_shader_cache, config::enabled) ==
+         config::enabled;
+ 
++    // Bergamot: expose the renderer's existing async pipeline compilation. When a pipeline
++    // is not built yet, large draws are skipped until worker threads finish it instead of
++    // stalling the frame. Off unless the host asks, matching upstream libretro behaviour.
++    Settings::values.async_shader_compilation =
++        LibRetro::FetchVariable("citra_async_shader_compilation", config::disabled) ==
++        config::enabled;
++
+     auto resolution = LibRetro::FetchVariable(config::graphics::resolution_factor, "1");
+     Settings::values.resolution_factor = std::stoi(resolution);
+ 
