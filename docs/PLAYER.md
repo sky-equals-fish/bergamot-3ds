@@ -61,6 +61,20 @@ game. The first time a brand-new effect appears, it compiles once and is cached
 from then on. Background compiling skips that one pause, but can draw a scene
 with pieces missing for a frame or two, which is why it's off by default.
 
+**Bringing shaders to another device:** on Mac, **File › Export Shaders…** saves
+every game's shader list to one `.bgshaders` file. Open it on your iPhone (AirDrop,
+Files, or the library's **Import** button) or with **File › Import Shaders…** on
+another Mac. The next time each game starts, those shaders are built during
+"Preparing shaders" instead of pausing the game. A game's list is only replaced
+by a larger one. The file holds shader setups taken from your games, so keep it to
+your own devices.
+
+Import also takes a game's four raw cache files (`<title ID>_vs.vkch`, `_fs`, `_gs`,
+`_pl`) picked together, for example from another app's
+`saves/Azahar/shaders/vulkan/transferable` folder. Close that app first. A cache
+from a different core build is accepted; its shaders are rebuilt once while the
+game loads.
+
 ## Good to know
 
 - Your data lives in `~/Library/Application Support/Bergamot 3DS` on Mac, or the

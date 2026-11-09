@@ -23,7 +23,8 @@ DENIED = {'.pem', '.p12', '.mobileprovision', '.key', '.keys', '.cia', '.3ds', '
 AZAHAR_PATCHES = {'0001-libretro-frame-synchronization.patch', '0007-azahar-no-jit-build.patch',
                   '0008-azahar-libretro-async-shaders.patch', '0009-azahar-libretro-shader-preparation.patch',
                   '0010-azahar-batch-cro-cache-invalidation.patch',
-                  '0011-azahar-restore-encrypted-content.patch'}
+                  '0011-azahar-restore-encrypted-content.patch',
+                  '0012-azahar-moltenvk-pipeline-builds.patch'}
 PLAYER_ART = re.compile(r'^default-(control-(a|b|x|y|l|r|zl|zr|home|select|start)|dpad|circle|cstick|skin-bezel|skin-phone-details|background|library-row|field|panel|font|icon-3ds|segment)-[0-9]+\.png$')
 RETIRED = re.compile(r'-(icon-(gc|wii|wiiu|switch|ps1|ps2|psp)|control-(plus|minus|cross|circle|square|triangle|z|l1|l2|l3|r1|r2|r3))-')
 

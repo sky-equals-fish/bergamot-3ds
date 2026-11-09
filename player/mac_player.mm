@@ -5,6 +5,7 @@
 #include "player_session.h"
 #import "user_keys.h"
 #import "key_import.h"
+#import "shader_cache_io.h"
 
 // Azahar reads keys.txt once per launch, when the first game starts.
 static BOOL BGGameRanThisLaunch = NO;
@@ -98,7 +99,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     [self buildEmptyState];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(occlusionChanged:) name:NSWindowDidChangeOcclusionStateNotification object:_window];
     [_window center]; [_window makeKeyAndOrderFront:nil]; [NSApp activateIgnoringOtherApps:YES];
-    if (_pendingOpen) { NSURL* u = _pendingOpen; _pendingOpen = nil; [self openGame:u]; }
+    if (_pendingOpen) { NSURL* u = _pendingOpen; _pendingOpen = nil; [self application:NSApp openFile:u.path]; }
     // Benchmark hook: BG_RUN_SECONDS=N stops the game after N seconds and quits cleanly.
     if (const char* seconds = getenv("BG_RUN_SECONDS"))
         [NSApp performSelector:@selector(terminate:) withObject:nil afterDelay:atof(seconds)];   // run-loop timer, not a main-queue block
@@ -160,6 +161,9 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     [file addItem:[self item:@"Install Update or DLC (.cia)…" action:@selector(installUpdate:) key:@"" tag:0]];
     [file addItem:[self item:@"Install Keys…" action:@selector(installKeys:) key:@"" tag:0]];
     [file addItem:NSMenuItem.separatorItem];
+    [file addItem:[self item:@"Export Shaders…" action:@selector(exportShaders:) key:@"" tag:0]];
+    [file addItem:[self item:@"Import Shaders…" action:@selector(importShaders:) key:@"" tag:0]];
+    [file addItem:NSMenuItem.separatorItem];
     [file addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
     NSMenu* emu = [[NSMenu alloc] initWithTitle:@"Emulation"];
     [emu addItem:[self item:@"Pause" action:@selector(togglePause:) key:@"p" tag:0]];
@@ -195,6 +199,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     if (item.action == @selector(togglePause:)) { item.title = _session.paused ? @"Resume" : @"Pause"; return _session.running; }
     if (item.action == @selector(stopGame:)) return _session.running;
     if (item.action == @selector(installUpdate:)) return !_session.running;
+    if (item.action == @selector(importShaders:)) return !_session.running;
     return YES;
 }
 - (void)openDocument:(id)sender {
@@ -205,7 +210,45 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     panel.allowedContentTypes = types; panel.message = @"Choose a 3DS game";
     [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) { if (r == NSModalResponseOK) [self openGame:panel.URL]; }];
 }
-- (BOOL)application:(NSApplication*)app openFile:(NSString*)path { (void)app; [self openGame:[NSURL fileURLWithPath:path]]; return YES; }
+- (BOOL)application:(NSApplication*)app openFile:(NSString*)path {
+    (void)app; NSURL* url = [NSURL fileURLWithPath:path];
+    if ([url.pathExtension.lowercaseString isEqualToString:BGShaderPackExtension]) [self importShaderPack:url];
+    else [self openGame:url];
+    return YES;
+}
+- (void)exportShaders:(id)sender {
+    (void)sender;
+    NSSavePanel* panel = [NSSavePanel savePanel];
+    panel.nameFieldStringValue = @"Bergamot 3DS Shaders.bgshaders";
+    UTType* type = [UTType typeWithFilenameExtension:BGShaderPackExtension]; if (type) panel.allowedContentTypes = @[type];
+    panel.message = @"Save every game's shaders to bring to another device";
+    [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
+        BOOL failed = NO; NSString* message = BGExportShaderCache(panel.URL, &failed);
+        self->_hint.stringValue = message; if (failed) [self alert:@"Export failed" message:message];
+    }];
+}
+- (void)importShaders:(id)sender {
+    (void)sender;
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    NSMutableArray* types = [NSMutableArray new];
+    for (NSString* e in @[BGShaderPackExtension, @"vkch"]) { UTType* t = [UTType typeWithFilenameExtension:e]; if (t) [types addObject:t]; }
+    panel.allowedContentTypes = types; panel.allowsMultipleSelection = YES;
+    panel.message = @"Choose a .bgshaders file, or a game's four .vkch shader cache files";
+    [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
+        if (panel.URLs.count == 1 && [panel.URL.pathExtension.lowercaseString isEqualToString:BGShaderPackExtension]) { [self importShaderPack:panel.URL]; return; }
+        if (self->_session.running) { self->_hint.stringValue = @"Stop the current game first (⌘.)"; NSBeep(); return; }
+        BOOL failed = NO; NSString* message = BGImportShaderFiles(panel.URLs, &failed);
+        self->_hint.stringValue = message; if (failed) [self alert:@"Import failed" message:message];
+    }];
+}
+- (void)importShaderPack:(NSURL*)url {
+    if (!_session) { _pendingOpen = url; return; }
+    if (_session.running) { _hint.stringValue = @"Stop the current game first (⌘.)"; NSBeep(); return; }
+    BOOL failed = NO; NSString* message = BGImportShaderCache(url, &failed);
+    _hint.stringValue = message; if (failed) [self alert:@"Import failed" message:message];
+}
 - (void)openGame:(NSURL*)url {
     if (!_session) { _pendingOpen = url; return; }   // Finder launch: open after the window exists
     if (_session.running) { _hint.stringValue = @"Stop the current game first (⌘.)"; NSBeep(); return; }

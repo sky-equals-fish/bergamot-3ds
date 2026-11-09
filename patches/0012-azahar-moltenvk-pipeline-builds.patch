@@ -1,0 +1,100 @@
+diff --git a/src/citra_libretro/libretro_vk.cpp b/src/citra_libretro/libretro_vk.cpp
+index b0f7dc4..59c24ba 100644
+--- a/src/citra_libretro/libretro_vk.cpp
++++ b/src/citra_libretro/libretro_vk.cpp
+@@ -109,8 +109,15 @@ bool CreateVulkanDevice(struct retro_vulkan_context* context, VkInstance instanc
+     // For now, let the Instance class handle these decisions
+     // AddExtensionIfAvailable(enabled_exts, available_exts,
+     // VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+-    // AddExtensionIfAvailable(enabled_exts, available_exts,
+-    // VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
++#ifdef __APPLE__
++    // Bergamot: MoltenVK implements extended dynamic state, which lets depth, cull, stencil and
++    // topology changes reuse one pipeline. Instance still decides whether to use it.
++    // BG_NO_EDS=1 turns it off, to rule it out if a game renders wrongly.
++    const bool has_extended_dynamic_state = !std::getenv("BG_NO_EDS") && AddExtensionIfAvailable(
++        enabled_exts, available_exts, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
++#else
++    const bool has_extended_dynamic_state = false;
++#endif
+ 
+     // Merge frontend's required features with our baseline
+     VkPhysicalDeviceFeatures merged_features{};
+@@ -184,6 +191,14 @@ bool CreateVulkanDevice(struct retro_vulkan_context* context, VkInstance instanc
+         enabled_features.pNext = &custom_border_color_features;
+     }
+ 
++    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extended_dynamic_state_features{
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT};
++    if (has_extended_dynamic_state) {
++        extended_dynamic_state_features.extendedDynamicState = VK_TRUE;
++        extended_dynamic_state_features.pNext = enabled_features.pNext;
++        enabled_features.pNext = &extended_dynamic_state_features;
++    }
++
+     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+     device_info.queueCreateInfoCount = 1;
+     device_info.pQueueCreateInfos = &queue_info;
+diff --git a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+index 5cf8c83..d390740 100644
+--- a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
++++ b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+@@ -3,6 +3,10 @@
+ // Refer to the LICENSE.txt file included.
+ 
+ #include <boost/container/static_vector.hpp>
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <optional>
+ 
+ #include "common/alignment.h"
+ #include "common/hash.h"
+@@ -108,6 +112,29 @@ bool GraphicsPipeline::TryBuild(bool wait_built) {
+ 
+ bool GraphicsPipeline::Build(bool fail_on_compile_required) {
+     MICROPROFILE_SCOPE(Vulkan_Pipeline);
++    // Bergamot diagnostic: BG_PIPE_LOG=1 prints one BGPIPE line per pipeline build (time, keys).
++    static const bool bg_pipe_log = std::getenv("BG_PIPE_LOG") != nullptr;
++    struct BgPipeTimer {
++        const GraphicsPipeline* self; bool quick; std::chrono::steady_clock::time_point start;
++        ~BgPipeTimer() {
++            const auto end = std::chrono::steady_clock::now();
++            const auto& st = self->info.state;
++            const u64 shaders = Common::HashCombine(st.shader_ids[0], st.shader_ids[1], st.shader_ids[2]);
++            std::fprintf(stderr,
++                "BGPIPE t=%.3f ms=%.2f quick=%d full=%016llx eds=%016llx sh=%016llx bl=%016llx at=%016llx vl=%016llx rs=%02x ds=%05x\n",
++                std::chrono::duration<double>(start.time_since_epoch()).count(),
++                std::chrono::duration<double, std::milli>(end - start).count(), quick ? 1 : 0,
++                (unsigned long long)Common::ComputeStructHash64(st),
++                (unsigned long long)Common::HashCombine(shaders, Common::ComputeStructHash64(st.vertex_layout),
++                    Common::ComputeStructHash64(st.attachments), Common::ComputeStructHash64(st.blending)),
++                (unsigned long long)shaders, (unsigned long long)Common::ComputeStructHash64(st.blending),
++                (unsigned long long)Common::ComputeStructHash64(st.attachments),
++                (unsigned long long)Common::ComputeStructHash64(st.vertex_layout),
++                (unsigned)st.rasterization.value, (unsigned)st.depth_stencil.value);
++        }
++    };
++    std::optional<BgPipeTimer> bg_pipe_timer;
++    if (bg_pipe_log) bg_pipe_timer.emplace(this, fail_on_compile_required, std::chrono::steady_clock::now());
+ 
+     const u32 stride_alignment = instance.GetMinVertexStrideAlignment();
+     std::array<vk::VertexInputBindingDescription, MAX_VERTEX_BINDINGS> bindings;
+diff --git a/src/video_core/renderer_vulkan/vk_instance.cpp b/src/video_core/renderer_vulkan/vk_instance.cpp
+index 077541c..d91f721 100644
+--- a/src/video_core/renderer_vulkan/vk_instance.cpp
++++ b/src/video_core/renderer_vulkan/vk_instance.cpp
+@@ -474,8 +474,11 @@ bool Instance::CreateDevice() {
+         add_extension(VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME, is_nvidia,
+                       "it is broken on Nvidia drivers");
+     const bool has_pipeline_creation_cache_control =
+-        add_extension(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME, is_nvidia,
+-                      "it is broken on Nvidia drivers");
++        add_extension(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME,
++                      is_nvidia || is_moltenvk,
++                      is_moltenvk ? "MoltenVK compiles synchronously instead of failing fast, "
++                                    "which serializes pipeline builds on the calling thread"
++                                  : "it is broken on Nvidia drivers");
+     const bool has_fragment_shader_barycentric =
+         add_extension(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME, is_moltenvk,
+                       "the PerVertexKHR attribute is not supported by MoltenVK");

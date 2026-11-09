@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ENV = dict(os.environ, DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer")
 PATCHES = ["0001-libretro-frame-synchronization.patch", "0007-azahar-no-jit-build.patch",
            "0008-azahar-libretro-async-shaders.patch", "0009-azahar-libretro-shader-preparation.patch",
-           "0010-azahar-batch-cro-cache-invalidation.patch", "0011-azahar-restore-encrypted-content.patch"]
+           "0010-azahar-batch-cro-cache-invalidation.patch", "0011-azahar-restore-encrypted-content.patch",
+           "0012-azahar-moltenvk-pipeline-builds.patch"]
 DENIED = {".cia", ".3ds", ".cci", ".cxi", ".3dsx", ".sav", ".bin", ".p12", ".pem", ".mobileprovision"}
 
 def run(*args):
@@ -100,7 +101,7 @@ def package_source(version, out):
         tar.add(azahar, f"{prefix}/vendor/azahar", filter=skip_git)
         note = (f"Bergamot 3DS {version} corresponding source.\n\n"
                 "vendor/azahar is the pinned Azahar commit from dependencies.json with its submodules,\n"
-                "with patches/0001 and 0007-0011 already applied, exactly as built.\n"
+                "with patches/0001 and 0007-0012 already applied, exactly as built.\n"
                 "MoltenVK (Apache-2.0) is the unmodified release named in dependencies.json.\n").encode()
         info = tarfile.TarInfo(f"{prefix}/SOURCE.txt"); info.size = len(note)
         import io; tar.addfile(info, io.BytesIO(note))

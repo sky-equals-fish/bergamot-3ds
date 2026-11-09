@@ -1,23 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
- <key>CFBundleExecutable</key><string>Bergamot 3DS</string>
- <key>CFBundleIdentifier</key><string>io.bergamot.threeds</string>
- <key>CFBundleName</key><string>Bergamot 3DS</string>
- <key>CFBundleDisplayName</key><string>Bergamot 3DS</string>
- <key>CFBundlePackageType</key><string>APPL</string>
- <key>CFBundleShortVersionString</key><string>0.1.0</string>
- <key>CFBundleVersion</key><string>1</string>
- <key>CFBundleIconFile</key><string>Bergamot3DS</string>
- <key>LSMinimumSystemVersion</key><string>13.0</string>
- <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
- <key>NSHighResolutionCapable</key><true/>
- <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
- <key>NSHumanReadableCopyright</key><string>GPL-3.0-or-later. Built on Azahar. Not affiliated with Nintendo.</string>
- <key>CFBundleDocumentTypes</key><array><dict>
-  <key>CFBundleTypeName</key><string>Nintendo 3DS game</string>
-  <key>CFBundleTypeRole</key><string>Viewer</string>
-  <key>LSHandlerRank</key><string>Alternate</string>
-  <key>CFBundleTypeExtensions</key><array><string>3ds</string><string>cci</string><string>cxi</string><string>cia</string><string>3dsx</string></array>
- </dict></array>
-</dict></plist>
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Bergamot 3DS</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>3ds</string>
+				<string>cci</string>
+				<string>cxi</string>
+				<string>cia</string>
+				<string>3dsx</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Nintendo 3DS game</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>bgshaders</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Bergamot 3DS shaders</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>io.bergamot.threeds.shaders</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>Bergamot 3DS</string>
+	<key>CFBundleIconFile</key>
+	<string>Bergamot3DS</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.bergamot.threeds</string>
+	<key>CFBundleName</key>
+	<string>Bergamot 3DS</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.games</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>GPL-3.0-or-later. Built on Azahar. Not affiliated with Nintendo.</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Bergamot 3DS shaders</string>
+			<key>UTTypeIdentifier</key>
+			<string>io.bergamot.threeds.shaders</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>bgshaders</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

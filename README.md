@@ -135,7 +135,9 @@ audio, input, saves, and embedding the core in an iOS app.
 - **Frame pacing.** The game runs on its own 59.83 Hz clock, independent of the
   display. On a Mac this matters: a ProMotion screen idling at 48 Hz used to hold
   games at 80% speed.
-- **Smoothness.** Shaders a game has used before are built before play starts.
+- **Smoothness.** Shaders a game has used before are built before play starts,
+  on parallel threads. A game's shader list can be exported from one device and
+  imported on another, so a new iPhone starts with everything the Mac has seen.
   Code-module loads no longer freeze the game.
 
 ## Status

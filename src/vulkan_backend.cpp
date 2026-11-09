@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "vulkan_backend.hpp"
+#include <TargetConditionals.h>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -29,6 +31,12 @@ VulkanBackend::~VulkanBackend() {
 }
 void VulkanBackend::initialize(const retro_hw_render_context_negotiation_interface_vulkan& n) {
     if (instance_) throw std::logic_error("Vulkan backend already initialized");
+#if TARGET_OS_OSX
+    // Let Metal compile shaders and pipelines on as many threads as the core asks for (macOS 13.3+;
+    // no iOS equivalent). Read once, at MoltenVK's first call, so it must be set before any.
+    // An explicit environment value wins.
+    setenv("MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION", "1", 0);
+#endif
     if (!n.create_device) throw std::runtime_error("Core lacks supported Vulkan device negotiation");
     std::uint32_t extension_count = 0;
     check(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr), "enumerate instance extensions");

@@ -19,6 +19,7 @@ static void BGNearest(UIView* v) { v.layer.magnificationFilter = kCAFilterNeares
 #include "game_art.hpp"
 #import "user_keys.h"   // the Bergamot app's keys.txt validator
 #import "key_import.h"
+#import "shader_cache_io.h"
 
 static BOOL BGGameRanThisLaunch = NO;   // Azahar reads keys.txt once, when the first game starts
 
@@ -437,7 +438,12 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     UIDocumentPickerViewController* p = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:BGTypes(exts) asCopy:YES];
     p.delegate = self; p.allowsMultipleSelection = !update; [self presentViewController:p animated:YES completion:nil];
 }
-- (void)importGame { [self pick:BGGameExtensions() update:NO]; }
+- (void)importGame { [self pick:[BGGameExtensions() arrayByAddingObjectsFromArray:@[BGShaderPackExtension, @"vkch"]] update:NO]; }
+- (void)importShaderPack:(NSURL*)url {
+    if (self.presentedViewController) { _message.text = @"Stop the game, then import the shaders again."; return; }
+    BOOL failed = NO; NSString* message = BGImportShaderCache(url, &failed);
+    _message.text = message; if (failed) BGAlert(self, @"Import failed", message);
+}
 - (void)importUpdate { [self pick:@[@"cia"] update:YES]; }
 - (void)documentPicker:(UIDocumentPickerViewController*)c didPickDocumentsAtURLs:(NSArray<NSURL*>*)urls {
     (void)c;
@@ -448,8 +454,17 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
         [installer installPackage:urls.firstObject completion:^(NSString* m, BOOL failed) { (void)installer; self->_message.text = m; if (failed) BGAlert(self, @"Install failed", m); }];
         return;
     }
+    NSMutableArray<NSURL*>* shaderFiles = [NSMutableArray new];
+    for (NSURL* u in urls) if ([u.pathExtension.lowercaseString isEqualToString:@"vkch"]) [shaderFiles addObject:u];
+    if (shaderFiles.count) {
+        if (self.presentedViewController) { _message.text = @"Stop the game, then import the shaders again."; return; }
+        BOOL failed = NO; NSString* message = BGImportShaderFiles(shaderFiles, &failed);
+        _message.text = message; if (failed) BGAlert(self, @"Import failed", message);
+        return;
+    }
     NSUInteger added = 0;
     for (NSURL* u in urls) {
+        if ([u.pathExtension.lowercaseString isEqualToString:BGShaderPackExtension]) { [self importShaderPack:u]; return; }
         if (![BGGameExtensions() containsObject:u.pathExtension.lowercaseString]) continue;
         NSURL* dest = [BGGamesFolder() URLByAppendingPathComponent:u.lastPathComponent];
         [NSFileManager.defaultManager removeItemAtURL:dest error:nil];
@@ -470,6 +485,18 @@ static UIButton* BGPanelButton(NSString* title, id target, SEL action) {
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene*)scene];
     self.window.rootViewController = [BGGamesController new]; self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     [self.window makeKeyAndVisible];
+    if (o.URLContexts.count) [self scene:scene openURLContexts:o.URLContexts];
+}
+// A .bgshaders file opened from AirDrop, Files or another app.
+- (void)scene:(UIScene*)scene openURLContexts:(NSSet<UIOpenURLContext*>*)contexts {
+    (void)scene;
+    for (UIOpenURLContext* c in contexts) {
+        NSURL* url = c.URL;
+        if (![url.pathExtension.lowercaseString isEqualToString:BGShaderPackExtension]) continue;
+        const BOOL scoped = [url startAccessingSecurityScopedResource];
+        [(BGGamesController*)self.window.rootViewController importShaderPack:url];
+        if (scoped) [url stopAccessingSecurityScopedResource];
+    }
 }
 @end
 @interface BGAppDelegate : UIResponder <UIApplicationDelegate>
