@@ -87,7 +87,7 @@ game loads.
 
 ## Building it yourself
 
-Build the core first (see the [README](../README.md#build-from-source)), then
+Build the core first (see the [README](../README.md#building)), then
 build the app with the same platform settings.
 
 ```sh
