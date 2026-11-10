@@ -10,9 +10,7 @@ and play; saves are kept automatically.
 pick it from **Open Recent**. Esc pauses, ⌘. stops, and the mouse acts as the
 touch screen.
 
-**iPhone and iPad:** install from the Xcode project in Releases (open it, pick
-your team under Signing & Capabilities, press Run), or sideload the unsigned
-`.ipa`. In the app, tap **Import** or copy games into **Files › On My iPhone ›
+**iPhone and iPad:** tap **Import** or copy games into **Files › On My iPhone ›
 Bergamot 3DS › Games**. The library shows each game's own icon and title, with
 search. Tap a game to play; HOME opens the pause menu.
 
@@ -87,15 +85,8 @@ game loads.
 
 ## Building it yourself
 
-Build the core first (see the [README](../README.md#building)), then
-build the app with the same platform settings.
-
-```sh
-# Mac
-cmake -S player -B build/player-macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DCTR_PLATFORM=macos
-cmake --build build/player-macos
-open "build/player-macos/Bergamot 3DS.app"
-```
+The Mac build is in the [README](../README.md#building). It produces
+`build/player-macos/Bergamot 3DS.app`.
 
 ```sh
 # iPhone / iPad: needs Xcode's iOS SDK; sign the result with your own identity

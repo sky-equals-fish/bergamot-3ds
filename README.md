@@ -17,55 +17,32 @@ built on [Azahar](https://github.com/azahar-emu/azahar). It runs without JIT, so
 on iPhone it doesn't need a debugger attached or any special entitlements to run
 smoothly.
 
-It's an early preview. Expect rough edges, and please open an issue if a game
-doesn't work.
+It's an experimental preview. Please open an issue if a game doesn't work.
 
 *Bergamot 3DS is not affiliated with or endorsed by Nintendo.*
 
 ## Features
 
-- Upscaling up to 4×, with an Auto setting that picks a good level for your device
-- Stacked or side-by-side screens
-- Shaders are prepared when a game starts, so games you've played before run smoothly
-- Shader caches can be moved between devices, so your iPhone can start with what your Mac has already built
-- Game controllers, keyboard, and mouse or touch for the bottom screen
+- Upscaling up to 4×, with an Auto setting that picks a level for your device
+- Shaders are prepared when a game starts, so effects you've already seen don't stutter
+- Shader caches can be moved between devices, so an iPhone can start with what a Mac has already built
 
 ## Installation
 
 Download the latest build from [Releases](https://github.com/sky-equals-fish/bergamot-3ds/releases/latest).
 
-### Mac
-
-Requires an Apple Silicon Mac with macOS 13 or later.
-
-1. Download the Mac `.zip` and unzip it.
-2. Open the app. Builds aren't notarized yet, so the first time you'll need to
-   allow it in **System Settings › Privacy & Security › Open Anyway**.
-3. Open a game with **File › Open Game**, or drag it onto the window.
-
-### iPhone and iPad
-
-Requires iOS 18 or later.
-
-1. Download the Xcode project `.zip` and open `Bergamot3DS.xcodeproj`.
-2. Under **Signing & Capabilities**, pick your team. A free Apple ID works, but
-   the app expires after 7 days.
-3. Connect your device and press **Run**.
-
-You can also sideload the unsigned `.ipa` with AltStore or SideStore.
-
-Add games from the app's library, or put them in
-**Files › On My iPhone › Bergamot 3DS › Games**.
+- **Mac:** Apple Silicon, macOS 13 or later. Builds aren't notarized yet, so allow
+  the app in **System Settings › Privacy & Security** the first time.
+- **iPhone and iPad:** iOS 18 or later. Build the Xcode project with your own team,
+  or sideload the unsigned `.ipa` with AltStore or SideStore.
 
 See the [app guide](docs/PLAYER.md) for controls, settings and keys.
 
 ## Building
 
-You'll need an Apple Silicon Mac with Xcode, Git and Python 3.
+Needs an Apple Silicon Mac with Xcode, Git and Python 3.
 
 ```sh
-git clone https://github.com/sky-equals-fish/bergamot-3ds.git
-cd bergamot-3ds
 python3 tools/bootstrap.py
 export PATH="$PWD/.venv/bin:$PATH"
 python tools/build_core.py macos
@@ -76,8 +53,8 @@ cmake --build build/player-macos
 `bootstrap.py` downloads Azahar and applies our patches. iPhone builds are covered
 in the [app guide](docs/PLAYER.md#building-it-yourself).
 
-The emulator core is also a standalone CMake library, if you want 3DS emulation in
-your own Mac or iOS app. See [docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURCE_PACKAGE.md).
+The emulator core is also a standalone CMake library. See
+[docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURCE_PACKAGE.md).
 
 ## Credits
 
@@ -89,7 +66,7 @@ your own Mac or iOS app. See [docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURC
 
 ## License
 
-Bergamot 3DS is licensed under GPL-3.0-or-later, the same as Azahar. See
+GPL-3.0-or-later, the same as Azahar. See
 [LICENSE](LICENSE), [NOTICE.txt](NOTICE.txt) and
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). No games, keys or firmware are
 included.
