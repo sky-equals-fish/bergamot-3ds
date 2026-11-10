@@ -88,9 +88,6 @@ your own Mac or iOS app. See [docs/THREEDS_SOURCE_PACKAGE.md](docs/THREEDS_SOURC
 - [MoltenVK](https://github.com/KhronosGroup/MoltenVK), for running Azahar's Vulkan
   renderer on Metal.
 
-Bergamot 3DS is part of Project Bergamot by Sky=Fish, which also includes an
-upcoming multi-system front end called Bergamot. Bergie, up top, is the mascot.
-
 ## License
 
 Bergamot 3DS is licensed under GPL-3.0-or-later, the same as Azahar. See
