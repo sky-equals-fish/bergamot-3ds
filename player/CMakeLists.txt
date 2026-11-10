@@ -2,7 +2,7 @@
 # Bergamot 3DS player: a small iOS and Mac app around Bergamot::ThreeDS.
 # Configure with the same CTR_PLATFORM / toolchain flags as systems/3ds.
 cmake_minimum_required(VERSION 3.25)
-project(Bergamot3DSPlayer VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+project(Bergamot3DSPlayer VERSION 0.1.1 LANGUAGES CXX OBJCXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../systems/3ds" bergamot)

@@ -1,6 +1,6 @@
 # Bergamot 3DS status
 
-Last updated 2026-11-09. Covers the 3DS core and the Bergamot 3DS app only.
+Last updated 2026-11-09 (iPhone run added). Covers the 3DS core and the Bergamot 3DS app only.
 
 ## Tested
 
@@ -19,12 +19,25 @@ Last updated 2026-11-09. Covers the 3DS core and the Bergamot 3DS app only.
   importing a shader list made on the Mac, with the compiler caches still wiped: about 12 s of
   "Preparing shaders", then 4 pauses over 100 ms (new effects the earlier run hadn't seen).
   Fully warm: none. Dynamic state renders the same 15 sampled frames identically.
+- **iPhone 15 Pro, v0.1.0 release build.** Built from the published Xcode project and
+  installed with a development signature. Encrypted Alpha Sapphire `.cia`, warm shader and
+  driver caches, the same 3-minute auto-advance intro route as on the Mac, run twice back to
+  back: at 1×, median 100% speed and 59.8 fps, no frame over 100 ms (worst 79 ms), 0.3 s of
+  "Preparing shaders"; at Auto (3× on this model), median 100% / 59.8 fps, no frame over
+  100 ms (worst 92 ms), 0.3 s preparing. One of about 190 one-second samples per run fell
+  below 95% speed. Cold caches, longer sessions and thermals on the phone are still untested.
+- **iPhone 15 Pro, app updates (0.1.1).** 0.1.0 reinstalled each game once after every app
+  update (about 10 s for Alpha Sapphire), because iOS moves the app's data folder and the
+  installed-games list stored full paths. 0.1.1 stores paths relative to the app's folder and
+  converts 0.1.0 entries. Three installs in a row, each into a new data folder, started the game
+  in 7–16 ms with no reinstall. On the Mac the list converts the same way and launches still skip
+  the install.
 - **Mac, encrypted CIA (patch 0011).** An encrypted Alpha Sapphire `.cia` installs, decrypts
   with the user's `keys.txt`, and runs at 59.9 fps / 100% speed.
 
 ## Not tested yet
 
-- The current core (patches 0008–0012) and the Bergamot 3DS app on a physical iPhone.
+- Cold-cache shader stutter on a physical iPhone, and how it compares with the Mac.
 - 3DS rendering in iOS Simulator, which hits a MoltenVK assertion at startup.
 - Long sessions, thermals, and games beyond the ones above.
 - A notarized Mac build.

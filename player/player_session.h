@@ -93,19 +93,72 @@ static NSInteger BGPlayerScale() {
 // file's size and modification date and the installed content file are all unchanged, so
 // replacing or editing the .cia triggers a fresh install.
 static NSURL* BGInstallIndexURL() { return [BGPlayerDataRoot() URLByAppendingPathComponent:@"installed-titles.plist"]; }
+// Paths inside BGPlayerDocuments() are stored as "~docs/<relative path>", because iOS moves an
+// app's data container (and so every absolute path in it) on each app update. Paths elsewhere,
+// such as a Mac's Downloads folder, stay absolute.
+static NSString* const BGDocsMarker = @"~docs/";
+static NSString* BGPortablePath(NSString* path) {
+    NSURL* docs = BGPlayerDocuments();
+    NSArray<NSString*>* roots = @[docs.path.stringByStandardizingPath, docs.URLByResolvingSymlinksInPath.path];
+    for (NSString* candidate in @[path.stringByStandardizingPath, path.stringByResolvingSymlinksInPath])
+        for (NSString* root in roots)
+            if (root.length && [candidate hasPrefix:[root stringByAppendingString:@"/"]])
+                return [BGDocsMarker stringByAppendingString:[candidate substringFromIndex:root.length + 1]];
+    return path.stringByStandardizingPath;
+}
+static NSString* BGLocalPath(NSString* stored) {
+    return [stored hasPrefix:BGDocsMarker] ? [BGPlayerDocuments().path stringByAppendingPathComponent:[stored substringFromIndex:BGDocsMarker.length]] : stored;
+}
+// Index keys are "<path>|<size>|<mtime>"; converts the path part (the path itself may contain "|").
+static NSString* BGPortableKey(NSString* key) {
+    const NSRange last = [key rangeOfString:@"|" options:NSBackwardsSearch];
+    if (last.location == NSNotFound) return key;
+    const NSRange split = [key rangeOfString:@"|" options:NSBackwardsSearch range:NSMakeRange(0, last.location)];
+    if (split.location == NSNotFound) return key;
+    return [BGPortablePath([key substringToIndex:split.location]) stringByAppendingString:[key substringFromIndex:split.location]];
+}
 static NSString* BGSourceKey(NSURL* source) {
     NSDictionary* a = [NSFileManager.defaultManager attributesOfItemAtPath:source.path error:nil];
-    return [NSString stringWithFormat:@"%@|%llu|%.0f", source.path.stringByStandardizingPath, a.fileSize, a.fileModificationDate.timeIntervalSince1970];
+    return [NSString stringWithFormat:@"%@|%llu|%.0f", BGPortablePath(source.path), a.fileSize, a.fileModificationDate.timeIntervalSince1970];
+}
+// Reads the index, converting entries written by 0.1.0 (absolute paths into an earlier container
+// of this app) to the portable form. An entry is converted only when its installed content lies
+// in that container's Data folder, which only this app writes, so a game opened in place from
+// another app's container is never mistaken for one of ours. A converted index is written back,
+// which also drops duplicate entries left by earlier containers.
+static NSMutableDictionary<NSString*, NSString*>* BGLoadInstallIndex() {
+    NSDictionary* stored = [NSDictionary dictionaryWithContentsOfURL:BGInstallIndexURL()];
+    NSMutableDictionary<NSString*, NSString*>* index = [NSMutableDictionary new];
+    static NSRegularExpression* ours = [NSRegularExpression regularExpressionWithPattern:@"^(.*/Containers/Data/Application/[0-9A-Fa-f-]{36}/Documents)/(Data/.+)$" options:0 error:nil];
+    for (NSString* key in stored) {
+        NSString* value = stored[key];
+        if (![key isKindOfClass:NSString.class] || ![value isKindOfClass:NSString.class]) continue;
+        NSString *newKey = key, *newValue = value;
+        if (![value hasPrefix:BGDocsMarker]) {
+            if (NSTextCheckingResult* m = [ours firstMatchInString:value options:0 range:NSMakeRange(0, value.length)]) {
+                NSString* oldDocs = [[value substringWithRange:[m rangeAtIndex:1]] stringByAppendingString:@"/"];
+                newValue = [BGDocsMarker stringByAppendingString:[value substringWithRange:[m rangeAtIndex:2]]];
+                if ([key hasPrefix:oldDocs]) newKey = [BGDocsMarker stringByAppendingString:[key substringFromIndex:oldDocs.length]];
+            } else {
+                newKey = BGPortableKey(key);
+                newValue = BGPortablePath(value);
+            }
+        }
+        index[newKey] = newValue;
+    }
+    if (stored && ![index isEqualToDictionary:stored]) [index writeToURL:BGInstallIndexURL() error:nil];
+    return index;
 }
 static NSString* BGInstalledContent(NSURL* source) {
-    NSDictionary* index = [NSDictionary dictionaryWithContentsOfURL:BGInstallIndexURL()];
-    NSString* path = index[BGSourceKey(source)];
+    NSString* stored = BGLoadInstallIndex()[BGSourceKey(source)];
+    NSString* path = stored ? BGLocalPath(stored) : nil;
     return path && [NSFileManager.defaultManager fileExistsAtPath:path] ? path : nil;
 }
 static void BGRememberInstall(NSURL* source, NSString* content) {
-    NSMutableDictionary* index = [[NSDictionary dictionaryWithContentsOfURL:BGInstallIndexURL()] mutableCopy] ?: [NSMutableDictionary new];
-    for (NSString* key in index.allKeys) if ([key hasPrefix:[source.path.stringByStandardizingPath stringByAppendingString:@"|"]]) [index removeObjectForKey:key];
-    index[BGSourceKey(source)] = content;
+    NSMutableDictionary<NSString*, NSString*>* index = BGLoadInstallIndex();
+    NSString* prefix = [BGPortablePath(source.path) stringByAppendingString:@"|"];
+    for (NSString* key in index.allKeys) if ([key hasPrefix:prefix]) [index removeObjectForKey:key];
+    index[BGSourceKey(source)] = BGPortablePath(content);
     [index writeToURL:BGInstallIndexURL() error:nil];
 }
 
