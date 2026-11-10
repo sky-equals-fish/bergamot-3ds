@@ -26,11 +26,18 @@ def main():
              "-DBERGAMOT_NO_JIT=ON", "-DENABLE_BUILTIN_KEYBLOB=OFF", "-DENABLE_LTO=OFF",
              "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_OSX_ARCHITECTURES=arm64",
              "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"]
+    # Record source paths relative to the checkout instead of this machine's home folder, so
+    # released binaries don't carry it (assert and __FILE__ strings). Clang splits the option at
+    # the first "=", so a checkout path containing "=" is mapped only up to that character.
+    anchor = str(ROOT).split("=", 1)[0] if "=" in str(ROOT) else str(ROOT)
+    common = f"-ffile-prefix-map={anchor}={Path(anchor).name}"
+    if args.platform in ("ios", "ios-simulator"):
+        common += " -DIOS"
+    flags += [f"-DCMAKE_{lang}_FLAGS={common}" for lang in ("C", "CXX", "OBJC", "OBJCXX")]
     if args.platform in ("ios", "ios-simulator"):
         sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator" if args.platform == "ios-simulator" else "iphoneos", "--show-sdk-path"], env=env, text=True).strip()
         flags += ["-DIOS=ON", "-DCMAKE_SYSTEM_NAME=iOS", "-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0",
                   "-DCMAKE_OSX_SYSROOT=" + sdk,
-                  "-DCMAKE_C_FLAGS=-DIOS", "-DCMAKE_CXX_FLAGS=-DIOS",
                   "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCITRA_USE_PRECOMPILED_HEADERS=OFF",
                   "-DENABLE_OPT=OFF"]
     subprocess.run(["cmake", "--fresh", "-S", str(source), "-B", str(build), *flags], env=env, check=True)

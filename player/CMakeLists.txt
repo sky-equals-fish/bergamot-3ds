@@ -27,7 +27,8 @@ if(CTR_PLATFORM MATCHES "^ios")
     set_source_files_properties(${BG_LICENSES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/Licenses")
     set_target_properties(Bergamot3DS PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/iOSInfo.plist"
-        BUILD_RPATH "@executable_path/Frameworks" INSTALL_RPATH "@executable_path/Frameworks")
+        BUILD_RPATH "@executable_path/Frameworks" INSTALL_RPATH "@executable_path/Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE)
     add_custom_command(TARGET Bergamot3DS POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Bergamot3DS>/Frameworks"
         COMMAND ${CMAKE_COMMAND} -E copy "${BG_CORE}" "$<TARGET_BUNDLE_DIR:Bergamot3DS>/Frameworks/azahar_libretro.dylib")
@@ -43,7 +44,8 @@ else()
     set_source_files_properties(${BG_LICENSES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/Licenses")
     set_target_properties(Bergamot3DS PROPERTIES OUTPUT_NAME "Bergamot 3DS"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/MacInfo.plist"
-        BUILD_RPATH "@executable_path/../Frameworks" INSTALL_RPATH "@executable_path/../Frameworks")
+        BUILD_RPATH "@executable_path/../Frameworks" INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE)
     add_custom_command(TARGET Bergamot3DS POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Bergamot3DS>/Contents/Frameworks"
         COMMAND ${CMAKE_COMMAND} -E copy "${BG_CORE}" "$<TARGET_BUNDLE_DIR:Bergamot3DS>/Contents/Frameworks/azahar_libretro.dylib")
