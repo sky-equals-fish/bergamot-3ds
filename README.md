@@ -14,7 +14,8 @@
 
 Bergamot 3DS is a Nintendo 3DS emulator for iPhone, iPad and Apple Silicon Macs,
 built on [Azahar](https://github.com/azahar-emu/azahar). It runs without JIT, so
-on iPhone it doesn't need a debugger attached or any special entitlements.
+on iPhone it doesn't need a debugger attached or any special entitlements to run
+smoothly.
 
 It's an early preview. Expect rough edges, and please open an issue if a game
 doesn't work.
