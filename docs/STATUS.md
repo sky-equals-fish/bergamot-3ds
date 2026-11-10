@@ -34,6 +34,11 @@ Last updated 2026-11-09 (iPhone run added). Covers the 3DS core and the Bergamot
   the install.
 - **Mac, encrypted CIA (patch 0011).** An encrypted Alpha Sapphire `.cia` installs, decrypts
   with the user's `keys.txt`, and runs at 59.9 fps / 100% speed.
+- **Mac, missing keys (0.1.2).** With an empty data folder and no `keys.txt`, an encrypted
+  `.cia` is refused with "This game is encrypted. Install your keys.txt, then open it again"
+  and nothing is installed. A `keys.txt` with no usable keys gets a "couldn't decrypt" message
+  instead. Before 0.1.2 both cases showed "Package installation failed (3)". Not checked on an
+  iPhone.
 
 ## Not tested yet
 
