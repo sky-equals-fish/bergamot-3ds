@@ -26,11 +26,9 @@ doesn't work.
 
 - Upscaling up to 4×, with an Auto setting that picks a good level for your device
 - Stacked or side-by-side screens
-- Encrypted games, using your own `keys.txt`
 - Shaders are prepared when a game starts, so games you've played before run smoothly
 - Shader caches can be moved between devices, so your iPhone can start with what your Mac has already built
 - Game controllers, keyboard, and mouse or touch for the bottom screen
-- Opens `.3ds`, `.cci`, `.cxi`, `.3dsx` and `.cia`
 
 ## Installation
 
