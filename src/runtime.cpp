@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 #include <array>
 #include <cstring>
@@ -95,8 +96,19 @@ std::filesystem::path Runtime::install_package(const std::filesystem::path& file
     if (attempted_load_) throw std::logic_error("Install packages before starting a title");
     std::array<char, 4096> path{};
     const auto status = ctr_install_cia(file.c_str(), path.data(), path.size());
-    if (status == 5) throw std::runtime_error("Couldn't decrypt this package. Install your keys.txt (and seeddb.bin for seed-encrypted titles), then try again");
-    if (status) throw std::runtime_error("Package installation failed (" + std::to_string(status) + ")");
+    if (status) {
+        // An encrypted package fails here when the user's keys are missing or don't match; the
+        // core only reports a generic abort, so say which it is.
+        ctr_content_info info{};
+        if (status == 5 || (!ctr_inspect_content(file.c_str(), &info) && info.cia_content_encrypted)) {
+            std::error_code ignored;
+            const bool keys = std::filesystem::exists(std::filesystem::path(save_dir_) / "Azahar" / "sysdata" / "keys.txt", ignored);
+            throw std::runtime_error(keys
+                ? "Couldn't decrypt this game with your keys. Check keys.txt (and seeddb.bin for seed-encrypted titles), then try again"
+                : "This game is encrypted. Install your keys.txt, then open it again");
+        }
+        throw std::runtime_error("Package installation failed (" + std::to_string(status) + ")");
+    }
     return path.data();
 }
 ctr_perf_info Runtime::performance() const {
