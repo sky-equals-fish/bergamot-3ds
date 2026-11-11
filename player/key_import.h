@@ -39,8 +39,17 @@ static NSString* BGInstallKeyFiles(NSArray<NSURL*>* urls, BOOL gameRanThisLaunch
             [data writeToURL:dest atomically:YES];
             [NSFileManager.defaultManager setAttributes:@{NSFilePosixPermissions: @0600} ofItemAtPath:dest.path error:nil];
             [done addObject:name];
+        } else if ([name isEqualToString:@"seeddb.bin"]) {
+            // Seeds for games that use seed encryption: a 16-byte header, then 32 bytes per title.
+            if (data.length < 16 || (data.length - 16) % 32 != 0) {
+                [problems addObject:[NSString stringWithFormat:@"%@ is the wrong size.", u.lastPathComponent]]; continue;
+            }
+            NSURL* dest = [sys URLByAppendingPathComponent:name];
+            [data writeToURL:dest atomically:YES];
+            [NSFileManager.defaultManager setAttributes:@{NSFilePosixPermissions: @0600} ofItemAtPath:dest.path error:nil];
+            [done addObject:[NSString stringWithFormat:@"seeddb.bin (%lu seeds)", (unsigned long)((data.length - 16) / 32)]];
         } else {
-            [problems addObject:[NSString stringWithFormat:@"%@ isn't keys.txt, boot9.bin or otp.bin.", u.lastPathComponent]];
+            [problems addObject:[NSString stringWithFormat:@"%@ isn't keys.txt, seeddb.bin, boot9.bin or otp.bin.", u.lastPathComponent]];
         }
     }
     NSMutableString* text = [NSMutableString new];

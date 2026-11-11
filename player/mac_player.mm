@@ -171,7 +171,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     [emu addItem:NSMenuItem.separatorItem];
     NSMenuItem* res = [[NSMenuItem alloc] initWithTitle:@"Upscaling" action:nil keyEquivalent:@""];
     NSMenu* resMenu = [[NSMenu alloc] initWithTitle:@"Upscaling"];
-    for (NSInteger s = 1; s <= 4; ++s) [resMenu addItem:[self item:[NSString stringWithFormat:@"%ld× (%ldp)", (long)s, (long)s * 240] action:@selector(setScale:) key:@"" tag:s]];
+    for (NSInteger s = 1; s <= 6; ++s) [resMenu addItem:[self item:[NSString stringWithFormat:@"%ld× (%ldp)", (long)s, (long)s * 240] action:@selector(setScale:) key:@"" tag:s]];
     res.submenu = resMenu; [emu addItem:res];
     [emu addItem:[self item:@"Side-by-Side Screens" action:@selector(toggleLayout:) key:@"l" tag:0]];
     [emu addItem:[self item:@"Queue-Ordered GPU Handoff" action:@selector(toggleHandoff:) key:@"" tag:0]];
@@ -194,7 +194,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
 - (BOOL)validateMenuItem:(NSMenuItem*)item {
     if (item.action == @selector(openRecent:)) return !_session.running;
     if (item.action == @selector(setScale:)) { item.state = item.tag == BGPlayerScale(); return !_session.running; }
-    if (item.action == @selector(toggleHandoff:)) { item.state = [NSUserDefaults.standardUserDefaults boolForKey:@"BGQueueOrderedPresent"]; return !_session.running; }
+    if (item.action == @selector(toggleHandoff:)) { item.state = BGQueueOrderedPresent(); return !_session.running; }
     if (item.action == @selector(toggleLayout:)) { item.state = _sideBySide; return YES; }
     if (item.action == @selector(togglePause:)) { item.title = _session.paused ? @"Resume" : @"Pause"; return _session.running; }
     if (item.action == @selector(stopGame:)) return _session.running;
@@ -280,7 +280,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     (void)sender;
     NSOpenPanel* panel = [NSOpenPanel openPanel];
     panel.allowsMultipleSelection = YES;
-    panel.message = @"Choose keys.txt or aes_keys.txt, and optionally boot9.bin and otp.bin";
+    panel.message = @"Choose keys.txt or aes_keys.txt, and optionally seeddb.bin, boot9.bin and otp.bin";
     [panel beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
         if (r != NSModalResponseOK) return;
         NSArray<NSString*>* problems = nil;
@@ -316,7 +316,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
 }
 - (void)stopGame:(id)sender { (void)sender; [_session stop]; }
 - (void)setScale:(NSMenuItem*)item { [NSUserDefaults.standardUserDefaults setInteger:item.tag forKey:@"BGPlayerScale"]; [self syncSettings]; }
-- (void)toggleHandoff:(id)sender { (void)sender; NSUserDefaults* d = NSUserDefaults.standardUserDefaults; [d setBool:![d boolForKey:@"BGQueueOrderedPresent"] forKey:@"BGQueueOrderedPresent"]; [self syncSettings]; }
+- (void)toggleHandoff:(id)sender { (void)sender; NSUserDefaults* d = NSUserDefaults.standardUserDefaults; [d setBool:!BGQueueOrderedPresent() forKey:@"BGQueueOrderedPresent"]; [self syncSettings]; }
 - (void)toggleLayout:(id)sender {
     (void)sender; _sideBySide = !_sideBySide; [NSUserDefaults.standardUserDefaults setBool:_sideBySide forKey:@"BGPlayerSideBySide"];
     [self applySlots];
@@ -335,9 +335,9 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     if (!_settings) {
         _settings = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 480, 230) styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
         _settings.title = @"Settings"; _settings.releasedWhenClosed = NO;
-        _scalePopup = [self popup:@[@"1× Native (400×240)", @"2× (800×480)", @"3× (1200×720)", @"4× (1600×960)"] action:@selector(scalePicked:)];
+        _scalePopup = [self popup:@[@"1× Native (400×240)", @"2× (800×480)", @"3× (1200×720)", @"4× (1600×960)", @"5× (2000×1200)", @"6× (2400×1440)"] action:@selector(scalePicked:)];
         _layoutPopup = [self popup:@[@"Stacked", @"Side by side"] action:@selector(layoutPicked:)];
-        _handoffPopup = [self popup:@[@"Standard (sync each frame)", @"Queue-ordered (experimental)"] action:@selector(handoffPicked:)];
+        _handoffPopup = [self popup:@[@"Sync each frame", @"Queue-ordered (default)"] action:@selector(handoffPicked:)];
         _shaderPopup = [self popup:@[@"Prepare cached shaders (recommended)", @"Also compile new shaders in background"] action:@selector(shadersPicked:)];
         NSGridView* grid = [NSGridView gridViewWithViews:@[
             @[[NSTextField labelWithString:@"Upscaling:"], _scalePopup],
@@ -364,7 +364,7 @@ static NSColor* BGHex(unsigned v) { return [NSColor colorWithSRGBRed:((v >> 16) 
     NSUserDefaults* d = NSUserDefaults.standardUserDefaults;
     [_scalePopup selectItemAtIndex:BGPlayerScale() - 1];
     [_layoutPopup selectItemAtIndex:_sideBySide ? 1 : 0];
-    [_handoffPopup selectItemAtIndex:[d boolForKey:@"BGQueueOrderedPresent"] ? 1 : 0];
+    [_handoffPopup selectItemAtIndex:BGQueueOrderedPresent() ? 1 : 0];
     [_shaderPopup selectItemAtIndex:[d boolForKey:@"BGAsyncShaders"] ? 1 : 0];
     const BOOL idle = !_session.running;
     _scalePopup.enabled = _handoffPopup.enabled = _shaderPopup.enabled = idle;   // read at game start

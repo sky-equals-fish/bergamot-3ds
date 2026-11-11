@@ -15,6 +15,7 @@
 #include "display_layout.hpp"
 #include "frame_pacer.hpp"
 #include <algorithm>
+#include <pthread/qos.h>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -84,9 +85,17 @@ static NSInteger BGAutoScale(NSInteger* pixels = nullptr) {
 #endif
 }
 // Internal resolution. Stored 1-4 is a fixed choice; 0 or unset means AUTO (native 1x on Mac).
+// GPU handoff mode. Queue-ordered (the default) lets the emulation thread start the next frame
+// while the GPU finishes the last one; "sync each frame" waits for the GPU inside every frame.
+// Stored only when changed, so the default can move without touching anyone's setting.
+static BOOL BGQueueOrderedPresent() {
+    id stored = [NSUserDefaults.standardUserDefaults objectForKey:@"BGQueueOrderedPresent"];
+    return stored ? [stored boolValue] : YES;
+}
 static NSInteger BGPlayerScale() {
     const NSInteger s = [NSUserDefaults.standardUserDefaults integerForKey:@"BGPlayerScale"];
-    return s >= 1 && s <= 4 ? s : BGAutoScale();
+    // 5x and 6x (2400x1440) are offered on Mac only; phone GPUs stop at 4x.
+    return s >= 1 && s <= (TARGET_OS_OSX ? 6 : 4) ? s : BGAutoScale();
 }
 
 // Installed base-game CIAs, keyed by source path. An entry is reused only while the source
@@ -207,6 +216,7 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
     std::atomic_bool _stop, _pausedFlag, _presenting;
     BOOL _running;
     AVAudioEngine* _engine; AVAudioPlayerNode* _player; AVAudioFormat* _format;
+    NSMutableArray* _audioObservers;
     id _connectObserver;
 }
 - (instancetype)initWithLayer:(CAMetalLayer*)layer {
@@ -294,10 +304,14 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
     _running = YES; _stop = false; _pausedFlag = false;
     { const std::lock_guard lock(_mutex); for (auto& in : _inputs) in = {}; }
     const unsigned scale = static_cast<unsigned>(BGPlayerScale());
-    const bool queueOrdered = [NSUserDefaults.standardUserDefaults boolForKey:@"BGQueueOrderedPresent"];
+    // Queue-ordered needs MoltenVK to commit submissions in order on the calling thread; the
+    // bundled build does. Anything else falls back to the per-frame wait instead of failing.
+    const bool queueOrdered = BGQueueOrderedPresent() && ctr::VulkanBackend::queue_submits_are_synchronous();
     const std::string root = BGPlayerDataRoot().fileSystemRepresentation;
     CAMetalLayer* layer = _layer;
     std::thread([self, game, scale, queueOrdered, root, layer] {
+        // The emulation thread drives every frame; keep it on the performance cores.
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
         @autoreleasepool {
             const BOOL scoped = [game startAccessingSecurityScopedResource];
             NSString* result = @"Stopped"; BOOL failed = NO;
@@ -366,8 +380,9 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                 auto pending = std::make_shared<std::vector<int16_t>>(); pending->reserve(4096);
                 auto queued = std::make_shared<std::atomic_uint64_t>(0);
                 const auto queueLimit = static_cast<std::uint64_t>(av.timing.sample_rate * 0.12);
+                auto audioScheduled = std::make_shared<std::atomic_uint64_t>(0); auto audioDropped = std::make_shared<std::atomic_uint64_t>(0);
                 AVAudioPlayerNode* player = self->_player; AVAudioFormat* format = self->_format;
-                runtime.set_audio_sink([player, format, pending, queued, queueLimit](const int16_t* samples, std::size_t count) {
+                runtime.set_audio_sink([player, format, pending, queued, queueLimit, audioScheduled, audioDropped](const int16_t* samples, std::size_t count) {
                     if (!player || !count) return;
                     pending->insert(pending->end(), samples, samples + count * 2);
                     constexpr std::size_t batch = 512; std::size_t offset = 0;   // ~15.6 ms at 32,728 Hz
@@ -379,9 +394,9 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                                 buffer.floatChannelData[0][i] = (*pending)[offset + i * 2] / 32768.0f;
                                 buffer.floatChannelData[1][i] = (*pending)[offset + i * 2 + 1] / 32768.0f;
                             }
-                            *queued += batch;
+                            *queued += batch; ++*audioScheduled;
                             [player scheduleBuffer:buffer completionHandler:^{ *queued -= batch; }];
-                        }
+                        } else ++*audioDropped;
                         offset += batch * 2;
                     }
                     if (offset) pending->erase(pending->begin(), pending->begin() + offset);
@@ -418,6 +433,9 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                 }
 #endif
                 struct StopWatchdog { std::shared_ptr<std::atomic_bool> w; std::thread& t; ~StopWatchdog() { *w = false; if (t.joinable()) t.join(); } } stopWatchdog{watching, watchdog};
+                // Time spent inside runtime.step() since the last BG_STATUS line: the emulation thread's
+                // cost per frame, which against the frame period shows how much headroom is left.
+                double stepSum = 0, stepMax = 0; unsigned stepCount = 0;
                 while (!self->_stop && !runtime.stopped()) {
                     if (self->_pausedFlag) {
                         runtime.drain_presentation(); [player pause];
@@ -436,7 +454,9 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                     stepBegan->store(stepStart.time_since_epoch().count());
                     @autoreleasepool { runtime.step(); }
                     stepBegan->store(0);
-                    if (const double stepMs = ms(stepStart, std::chrono::steady_clock::now()); stepMs > 40) {
+                    const double stepMs = ms(stepStart, std::chrono::steady_clock::now());
+                    stepSum += stepMs; stepMax = std::max(stepMax, stepMs); ++stepCount;
+                    if (stepMs > 40) {
                         // Split a long frame: GPU fence wait, presenter (Metal encode + drawable),
                         // and the rest, which is core CPU work including any synchronous shader compile.
                         const auto after = runtime.handoff_stats();
@@ -451,29 +471,78 @@ static CTRSkinInput BGControllerInput(GCExtendedGamepad* g) {
                         const auto stats = runtime.performance();
                         NSString* status = [NSString stringWithFormat:@"%.0f FPS · %.0f%%", stats.game_fps, stats.emulation_speed * 100];
                         const auto h = runtime.handoff_stats();
-                        std::fprintf(stderr, "BG_STATUS game_fps=%.1f speed=%.1f handoff_frames=%llu presenter_ms=%.1f producer_ms=%.1f\n",
-                                     stats.game_fps, stats.emulation_speed * 100, (unsigned long long)h.frames, h.presenter_ms, h.producer_wait_ms);
+                        std::fprintf(stderr, "BG_STATUS game_fps=%.1f speed=%.1f handoff_frames=%llu presenter_ms=%.1f producer_ms=%.1f step_ms=%.2f step_max=%.1f audio_batches=%llu audio_dropped=%llu audio_running=%d\n",
+                                     stats.game_fps, stats.emulation_speed * 100, (unsigned long long)h.frames, h.presenter_ms, h.producer_wait_ms,
+                                     stepCount ? stepSum / stepCount : 0.0, stepMax,
+                                     (unsigned long long)audioScheduled->load(), (unsigned long long)audioDropped->load(), (int)(self->_engine.isRunning && player.isPlaying));
+                        stepSum = stepMax = 0; stepCount = 0;
                         dispatch_async(dispatch_get_main_queue(), ^{ if (self->_running && self.statusChanged) self.statusChanged(status); });
                         nextSample += std::chrono::seconds(1);
                     }
                 }
                 runtime.unload();
             } catch (const std::exception& e) { result = [NSString stringWithUTF8String:e.what()]; failed = YES; }
-            [self->_player stop]; [self->_engine stop]; self->_player = nil; self->_engine = nil;
+            [self stopAudio];
             if (scoped) [game stopAccessingSecurityScopedResource];
             [self finish:result failed:failed];
         }
     }).detach();
 }
 - (void)startAudio:(double)rate {
+#if TARGET_OS_IOS
+    // Configure the session before building the engine, so the engine picks up the playback
+    // route and the game is heard with the ring/silent switch off. Failures are logged, not hidden.
+    AVAudioSession* session = AVAudioSession.sharedInstance; NSError* sessionError = nil;
+    if (![session setCategory:AVAudioSessionCategoryPlayback error:&sessionError])
+        std::fprintf(stderr, "BG_AUDIO category_error=%s\n", sessionError.localizedDescription.UTF8String);
+    if (![session setActive:YES error:&sessionError])
+        std::fprintf(stderr, "BG_AUDIO activate_error=%s\n", sessionError.localizedDescription.UTF8String);
+    std::fprintf(stderr, "BG_AUDIO route=%s volume=%.2f hw_rate=%.0f other_audio=%d\n",
+                 session.currentRoute.outputs.firstObject.portType.UTF8String ?: "none", session.outputVolume, session.sampleRate, (int)session.isOtherAudioPlaying);
+#endif
     _format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:rate channels:2];
     _engine = [AVAudioEngine new]; _player = [AVAudioPlayerNode new];
     [_engine attachNode:_player];
     [_engine connect:_player to:_engine.mainMixerNode format:_format];
+    NSError* startError = nil;
+    if ([_engine startAndReturnError:&startError]) [_player play];
+    else { std::fprintf(stderr, "BG_AUDIO engine_error=%s\n", startError.localizedDescription.UTF8String); _player = nil; }
+    std::fprintf(stderr, "BG_AUDIO engine_running=%d game_rate=%.0f\n", (int)_engine.isRunning, rate);
+    // The system stops the engine when the output route changes (headphones, Bluetooth) and
+    // interrupts the session for calls and alarms. Without a restart the game stays silent
+    // until it is reopened, so bring the engine back whenever either happens.
+    __weak BG3DSSession* weakSelf = self;
+    void (^recover)(NSString*) = ^(NSString* why) {
+        BG3DSSession* s = weakSelf; if (!s) return;
+        AVAudioEngine* engine; AVAudioPlayerNode* player;   // the emulation thread tears these down
+        { const std::lock_guard lock(s->_mutex); engine = s->_engine; player = s->_player; }
+        if (!engine || !player) return;
 #if TARGET_OS_IOS
-    [AVAudioSession.sharedInstance setCategory:AVAudioSessionCategoryPlayback error:nil];
-    [AVAudioSession.sharedInstance setActive:YES error:nil];
+        [AVAudioSession.sharedInstance setActive:YES error:nil];
 #endif
-    if ([_engine startAndReturnError:nil]) [_player play]; else { _player = nil; }
+        NSError* error = nil;
+        if (!engine.isRunning && ![engine startAndReturnError:&error])
+            std::fprintf(stderr, "BG_AUDIO restart_error=%s\n", error.localizedDescription.UTF8String);
+        if (engine.isRunning && !s->_pausedFlag) [player play];
+        std::fprintf(stderr, "BG_AUDIO recovered=%s engine_running=%d\n", why.UTF8String, (int)engine.isRunning);
+    };
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter; _audioObservers = [NSMutableArray new];
+    [_audioObservers addObject:[center addObserverForName:AVAudioEngineConfigurationChangeNotification object:_engine queue:NSOperationQueue.mainQueue
+                                               usingBlock:^(NSNotification*) { recover(@"route"); }]];
+#if TARGET_OS_IOS
+    [_audioObservers addObject:[center addObserverForName:AVAudioSessionInterruptionNotification object:nil queue:NSOperationQueue.mainQueue
+                                               usingBlock:^(NSNotification* note) {
+        if ([note.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue] == AVAudioSessionInterruptionTypeEnded) recover(@"interruption");
+    }]];
+    [_audioObservers addObject:[center addObserverForName:AVAudioSessionMediaServicesWereResetNotification object:nil queue:NSOperationQueue.mainQueue
+                                               usingBlock:^(NSNotification*) { recover(@"reset"); }]];
+#endif
+}
+- (void)stopAudio {
+    for (id observer in _audioObservers) [NSNotificationCenter.defaultCenter removeObserver:observer];
+    _audioObservers = nil;
+    AVAudioEngine* engine; AVAudioPlayerNode* player;
+    { const std::lock_guard lock(_mutex); engine = _engine; player = _player; _engine = nil; _player = nil; }
+    [player stop]; [engine stop];
 }
 @end

@@ -1,6 +1,6 @@
 # Bergamot 3DS status
 
-Last updated 2026-11-09 (iPhone run added). Covers the 3DS core and the Bergamot 3DS app only.
+Last updated 2026-11-10 (GPU handoff default, 6× on Mac). Covers the 3DS core and the Bergamot 3DS app only.
 
 ## Tested
 
@@ -40,6 +40,29 @@ Last updated 2026-11-09 (iPhone run added). Covers the 3DS core and the Bergamot
   instead. Before 0.1.2 both cases showed "Package installation failed (3)". Not checked on an
   iPhone.
 
+- **GPU handoff default (0.1.3).** Queue-ordered handoff is now the
+  app default: the emulation thread no longer waits for the GPU inside each frame. Same warm
+  75-second intro route, alternating order, time inside the emulation step per 16.7 ms frame:
+  - iPhone 15 Pro, Auto (3×): 14.6 / 14.8 ms syncing each frame, 6.4 / 6.9 ms queue-ordered.
+  - iPhone 15 Pro, 4×: 16.4 / 16.4 ms syncing (speed dipped to 89%), 7.2 / 7.5 ms queue-ordered
+    (100%, no one-second sample under 99.9%).
+  - Mac (M3 Pro), 1×: 9.3 / 9.5 ms syncing, 4.6 / 4.5 ms queue-ordered. At 4×: 4.3 ms. At the
+    new 6× (2400×1440): 4.6 ms queue-ordered, 11.7 ms syncing.
+  The lifecycle test (queue-ordered run-ahead bound) and the headless no-JIT host pass. These
+  are short runs of one game's intro; gameplay scenes, other games, long sessions and thermals
+  are not covered.
+- **iPhone 15 Pro, 8 minutes at 4× (queue-ordered, 0.1.3).** Auto-advanced intro route,
+  warm caches: 6.9–7.8 ms per frame in minutes 2–8 with no upward drift, median speed 100%,
+  60 fps scenes from minute 2. Two frames over 40 ms after startup (48 ms and 140 ms, both
+  core-side). One audio interruption late in the run: the engine restarted by itself; about
+  14 s of audio was discarded while it was interrupted. Thermal state was not recorded.
+- **Link-time optimization.** Measured on Mac, alternating with the standard core: 4.2 / 4.1 ms
+  against 4.0 / 4.2 ms. No gain, not adopted.
+- **iPhone audio.** One test build was silent on the phone. The session is now configured
+  before the audio engine is built, failures are logged, and audio restarts after route changes
+  and interruptions. Sound was confirmed by ear on the next build; the cause of the silent run
+  was not isolated, and route changes and interruptions have not been exercised.
+
 ## Not tested yet
 
 - Cold-cache shader stutter on a physical iPhone, and how it compares with the Mac.
@@ -52,6 +75,8 @@ Last updated 2026-11-09 (iPhone run added). Covers the 3DS core and the Bergamot
 - An effect seen for the very first time can still pause the game once while its
   shader compiles. It is cached after that. Importing a shader list from another
   device (`.bgshaders`) covers whatever that device has already seen.
+- Games that use seed encryption also need the user's `seeddb.bin`, which the key importer
+  accepts from 0.1.3. No seed-encrypted game has been run yet: the one tried had no seed file.
 - Encrypted games need the user's `keys.txt`. A `keys.txt` built from `boot9.bin` alone has no
   ECC root key, so `otp.bin` is ignored; games don't need it.
 - The C++ API is tied to the toolchain. There is no stable C ABI or XCFramework yet.

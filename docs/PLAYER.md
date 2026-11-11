@@ -18,7 +18,7 @@ Supported files are `.3ds`, `.cci`, `.cxi`, `.3dsx` and `.cia`. Encrypted games 
 console's `keys.txt`.
 Updates and DLC go through **File › Install Update or DLC** on Mac, or
 **Update** on iPhone. **File › Install Keys…** on Mac, or **Keys** on iPhone, installs your
-`keys.txt` or `aes_keys.txt` (and optionally `boot9.bin` and `otp.bin`) into Azahar's `sysdata`
+`keys.txt` or `aes_keys.txt` (and optionally `seeddb.bin`, `boot9.bin` and `otp.bin`) into Azahar's `sysdata`
 folder after checking them. Install keys before the first game of a launch; the core reads them once. Save in the game before you stop it.
 
 | Mac keys | 3DS |
@@ -38,10 +38,10 @@ button pauses.
 
 | Setting | Options | Default |
 | --- | --- | --- |
-| Upscaling | Auto, 1× native (400×240), 2×, 3×, 4× (1600×960) | Auto on iPhone, 1× on Mac |
+| Upscaling | Auto, 1× native (400×240), 2×, 3×, 4× (1600×960); 5× and 6× (2400×1440) on Mac | Auto on iPhone, 1× on Mac |
 | Screen layout | Stacked, side by side | Stacked |
 | Shaders | Prepare cached shaders, or also compile new ones in the background | Prepare only |
-| GPU handoff | Standard, queue-ordered (experimental) | Standard |
+| GPU handoff (Mac) | Queue-ordered, sync each frame | Queue-ordered |
 
 On Mac, everything is in **Settings** (⌘,), and upscaling and layout are also
 in the **Emulation** menu. On iPhone, upscaling is on the library screen. Upscaling,

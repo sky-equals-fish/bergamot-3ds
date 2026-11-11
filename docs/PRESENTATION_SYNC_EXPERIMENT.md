@@ -238,3 +238,12 @@ Keep synchronous presentation as the default until that comparison shows a
 repeatable benefit with no visual regressions. The core recreates its output
 image only on size changes, which the current hosts fix at launch; Metal's
 retained command-buffer references cover the exported texture in that path.
+
+## November 10: queue-ordered becomes the Bergamot 3DS app default
+
+Matched warm-cache runs in the standalone app on the iPhone 15 Pro (Auto and 4×, order
+sync / queue / queue / sync) and on the Mac are recorded in [STATUS.md](STATUS.md). The app
+now defaults to queue-ordered and falls back to the per-frame wait when MoltenVK does not
+report synchronous queue submits. `BGQueueOrderedPresent` stores only an explicit choice.
+Still open from the gate above: field and battle scenes, sustained thermal runs, and a
+visual comparison during play.

@@ -16,7 +16,7 @@ Runtime::Runtime(const std::filesystem::path& root, bool vulkan, unsigned scale)
     save_dir_ = (std::filesystem::absolute(root) / "saves").string();
     std::filesystem::create_directories(system_dir_);
     std::filesystem::create_directories(save_dir_);
-    if (scale < 1 || scale > 4) throw std::invalid_argument("Resolution scale must be 1 through 4");
+    if (scale < 1 || scale > 6) throw std::invalid_argument("Resolution scale must be 1 through 6");
     if (vulkan) vulkan_ = std::make_unique<VulkanBackend>();
     options_ = {{"citra_graphics_api", vulkan ? "Vulkan" : "Software"}, {"citra_use_cpu_jit", "disabled"},
                 {"citra_layout_option", "default"}, {"citra_swap_screen", "Top"},

@@ -13,6 +13,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("platform", choices=["macos", "ios", "ios-simulator"])
     parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument("--lto", action="store_true", help="link-time optimization (slower build)")
+    parser.add_argument("--build-dir", help="build folder name under build/ (default: the platform)")
+    parser.add_argument("--extra-flags", default="", help="extra compiler and linker flags, e.g. for profile-guided builds")
     args = parser.parse_args()
     source = ROOT / "vendor/azahar"
     actual = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
@@ -21,9 +24,9 @@ def main():
     env = dict(os.environ, DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer")
     env.pop("SDKROOT", None)
     env["PATH"] = str(ROOT / ".venv/bin") + os.pathsep + env["PATH"]
-    build = ROOT / "build" / args.platform
+    build = ROOT / "build" / (args.build_dir or args.platform)
     flags = ["-G", "Ninja", "-DENABLE_LIBRETRO=ON", "-DENABLE_TESTS=OFF",
-             "-DBERGAMOT_NO_JIT=ON", "-DENABLE_BUILTIN_KEYBLOB=OFF", "-DENABLE_LTO=OFF",
+             "-DBERGAMOT_NO_JIT=ON", "-DENABLE_BUILTIN_KEYBLOB=OFF", f"-DENABLE_LTO={'ON' if args.lto else 'OFF'}",
              "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_OSX_ARCHITECTURES=arm64",
              "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"]
     # Record source paths relative to the checkout instead of this machine's home folder, so
@@ -33,6 +36,9 @@ def main():
     common = f"-ffile-prefix-map={anchor}={Path(anchor).name}"
     if args.platform in ("ios", "ios-simulator"):
         common += " -DIOS"
+    if args.extra_flags:
+        common += " " + args.extra_flags
+        flags += [f"-DCMAKE_{kind}_LINKER_FLAGS={args.extra_flags}" for kind in ("SHARED", "MODULE", "EXE")]
     flags += [f"-DCMAKE_{lang}_FLAGS={common}" for lang in ("C", "CXX", "OBJC", "OBJCXX")]
     if args.platform in ("ios", "ios-simulator"):
         sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator" if args.platform == "ios-simulator" else "iphoneos", "--show-sdk-path"], env=env, text=True).strip()
